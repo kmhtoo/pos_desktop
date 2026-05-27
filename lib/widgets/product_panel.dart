@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/pos_provider.dart';
 import '../models/product.dart';
+import '../screens/info_screen.dart';
 
 class ProductPanel extends StatelessWidget {
   const ProductPanel({super.key});
@@ -24,15 +25,16 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<PosProvider>().currentUser;
     return Container(
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       color: const Color(0xFF1E293B),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.point_of_sale, color: Color(0xFF14B8A6), size: 28),
-          SizedBox(width: 12),
-          Text(
+          const Icon(Icons.point_of_sale, color: Color(0xFF14B8A6), size: 28),
+          const SizedBox(width: 12),
+          const Text(
             'FlutterPOS',
             style: TextStyle(
               color: Colors.white,
@@ -41,8 +43,62 @@ class _Header extends StatelessWidget {
               letterSpacing: 0.5,
             ),
           ),
-          Spacer(),
-          _ClockWidget(),
+          const Spacer(),
+          if (user != null) ...[
+            GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const InfoScreen()),
+              ),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF334155),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF14B8A6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          user.initials,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      user.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.info_outline,
+                      color: Color(0xFF64748B),
+                      size: 15,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+          ],
+          const _ClockWidget(),
         ],
       ),
     );
@@ -101,6 +157,14 @@ class _ClockWidgetState extends State<_ClockWidget> {
   }
 }
 
+const _categoryMeta = {
+  'All':       (Icons.apps_rounded,      Color(0xFF14B8A6)),
+  'Beverages': (Icons.local_cafe_rounded, Color(0xFF2196F3)),
+  'Food':      (Icons.lunch_dining,      Color(0xFFFF8F00)),
+  'Snacks':    (Icons.cookie_outlined,   Color(0xFFFFCA28)),
+  'Desserts':  (Icons.cake_outlined,     Color(0xFFE91E63)),
+};
+
 class _CategoryBar extends StatelessWidget {
   const _CategoryBar();
 
@@ -108,32 +172,52 @@ class _CategoryBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<PosProvider>();
     return Container(
-      height: 52,
+      height: 76,
       color: const Color(0xFF1E293B),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         children: PosProvider.categories.map((cat) {
           final selected = cat == provider.selectedCategory;
+          final meta = _categoryMeta[cat]!;
+          final icon = meta.$1;
+          final color = meta.$2;
           return Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: 10),
             child: InkWell(
               onTap: () => provider.selectCategory(cat),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(12),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: selected ? const Color(0xFF14B8A6) : const Color(0xFF334155),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  cat,
-                  style: TextStyle(
-                    color: selected ? Colors.white : const Color(0xFF94A3B8),
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 13,
+                  color: selected
+                      ? color.withValues(alpha: 0.15)
+                      : const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected ? color : const Color(0xFF334155),
+                    width: selected ? 1.5 : 1,
                   ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      icon,
+                      color: selected ? color : const Color(0xFF64748B),
+                      size: 20,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      cat,
+                      style: TextStyle(
+                        color: selected ? color : const Color(0xFF94A3B8),
+                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

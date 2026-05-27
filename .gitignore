@@ -4,6 +4,7 @@
 *.pyc
 *.swp
 .DS_Store
+Thumbs.db
 .atom/
 .build/
 .buildlog/
@@ -27,11 +28,28 @@ migrate_working_dir/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
+.packages
 /build/
 /coverage/
+
+# Flutter generated platform files
+**/Flutter/ephemeral/
+**/ephemeral/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+macos/Pods/
+macos/.symlinks/
+
+# Android local files
+android/local.properties
+android/.gradle/
+android/captures/
 
 # Symbolication related
 app.*.symbols

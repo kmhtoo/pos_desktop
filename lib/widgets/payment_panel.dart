@@ -277,8 +277,14 @@ class _PaymentPanelState extends State<PaymentPanel>
     return Column(
       children: [
         _buildAmountDisplay('Cash Tendered', _cashInput),
-        _buildQuickAmounts(provider.total),
-        Expanded(child: _buildNumpad()),
+        Expanded(
+          flex: 2,
+          child: _buildQuickAmounts(provider.total),
+        ),
+        Flexible(
+          flex: 1,
+          child: _buildNumpad(),
+        ),
         if (_cashInput.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -370,11 +376,13 @@ class _PaymentPanelState extends State<PaymentPanel>
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        Expanded(
+          flex: 2,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               const Text(
                 'Card Amount',
                 style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
@@ -425,7 +433,11 @@ class _PaymentPanelState extends State<PaymentPanel>
             ],
           ),
         ),
-        Expanded(child: _buildNumpad(isSplit: true)),
+        ),
+        Flexible(
+          flex: 1,
+          child: _buildNumpad(isSplit: true),
+        ),
       ],
     );
   }
@@ -464,38 +476,39 @@ class _PaymentPanelState extends State<PaymentPanel>
   Widget _buildQuickAmounts(double total) {
     final suggestions = _quickAmounts(total);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: suggestions.map((amount) {
           final isExact = amount == total;
           final label = isExact ? 'Exact' : '\$${amount.toInt()}';
           return Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
+              padding: const EdgeInsets.only(bottom: 6),
               child: GestureDetector(
                 onTap: () => _setQuickAmount(amount),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 7),
                   decoration: BoxDecoration(
                     color: isExact
                         ? const Color(0xFF14B8A6).withValues(alpha: 0.2)
                         : const Color(0xFF334155),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: isExact
                           ? const Color(0xFF14B8A6)
                           : Colors.transparent,
                     ),
                   ),
-                  child: Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: isExact
-                          ? const Color(0xFF14B8A6)
-                          : Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  child: Center(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: isExact
+                            ? const Color(0xFF14B8A6)
+                            : Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),

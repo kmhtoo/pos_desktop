@@ -1,9 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:window_manager/window_manager.dart';
 import 'providers/pos_provider.dart';
-import 'screens/pos_screen.dart';
+import 'screens/login_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+
+  const windowOptions = WindowOptions(
+    minimumSize: Size(1024, 700),
+    center: true,
+    title: 'FlutterPOS',
+    backgroundColor: Color(0xFF0F172A),
+    skipTaskbar: false,
+    titleBarStyle: TitleBarStyle.normal,
+  );
+
+  windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.setFullScreen(true);
+    await windowManager.show();
+    await windowManager.focus();
+  });
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => PosProvider(),
@@ -29,7 +48,7 @@ class POSApp extends StatelessWidget {
           error: Color(0xFFEF4444),
         ),
       ),
-      home: const POSScreen(),
+      home: const LoginScreen(),
     );
   }
 }

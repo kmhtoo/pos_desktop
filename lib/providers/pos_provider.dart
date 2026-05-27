@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/transaction.dart';
+import '../models/user.dart';
 
 class PosProvider extends ChangeNotifier {
   static const double taxRate = 0.10;
@@ -10,10 +11,29 @@ class PosProvider extends ChangeNotifier {
   final List<CartItem> _cart = [];
   final List<Transaction> _transactions = [];
   String _selectedCategory = 'All';
+  AppUser? _currentUser;
 
   List<CartItem> get cart => List.unmodifiable(_cart);
   List<Transaction> get transactions => List.unmodifiable(_transactions);
   String get selectedCategory => _selectedCategory;
+  AppUser? get currentUser => _currentUser;
+
+  int get activeReceiptCount => _transactions.where((t) => !t.isVoided).length;
+  double get activeTotalSales =>
+      _transactions.where((t) => !t.isVoided).fold(0.0, (s, t) => s + t.total);
+
+  void setUser(AppUser user) {
+    _currentUser = user;
+    notifyListeners();
+  }
+
+  void logout() {
+    _currentUser = null;
+    _cart.clear();
+    _transactions.clear();
+    _selectedCategory = 'All';
+    notifyListeners();
+  }
 
   static const List<String> categories = [
     'All',
@@ -63,6 +83,18 @@ class PosProvider extends ChangeNotifier {
 
   void clearCart() {
     _cart.clear();
+    notifyListeners();
+  }
+
+  void voidTransaction(String txnId) {
+    final user = _currentUser;
+    if (user == null) return;
+    final idx = _transactions.indexWhere((t) => t.id == txnId);
+    if (idx < 0 || _transactions[idx].isVoided) return;
+    _transactions[idx] = _transactions[idx].voidWith(
+      voidedByName: user.name,
+      voidedById: user.id,
+    );
     notifyListeners();
   }
 

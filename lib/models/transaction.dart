@@ -37,6 +37,10 @@ class Transaction {
   final double cardAmount;
   final double change;
   final DateTime timestamp;
+  final bool isVoided;
+  final String? voidedByName;
+  final String? voidedById;
+  final DateTime? voidedAt;
 
   const Transaction({
     required this.id,
@@ -49,7 +53,30 @@ class Transaction {
     required this.cardAmount,
     required this.change,
     required this.timestamp,
+    this.isVoided = false,
+    this.voidedByName,
+    this.voidedById,
+    this.voidedAt,
   });
 
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
+
+  Transaction voidWith({required String voidedByName, required String voidedById}) {
+    return Transaction(
+      id: id,
+      items: items,
+      subtotal: subtotal,
+      tax: tax,
+      total: total,
+      tenderType: tenderType,
+      cashAmount: cashAmount,
+      cardAmount: cardAmount,
+      change: change,
+      timestamp: timestamp,
+      isVoided: true,
+      voidedByName: voidedByName,
+      voidedById: voidedById,
+      voidedAt: DateTime.now(),
+    );
+  }
 }
