@@ -3,9 +3,16 @@ import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/transaction.dart';
 import '../models/user.dart';
+import '../models/business_day.dart';
+import '../models/shift.dart';
+import '../data/pos_repository.dart';
 
 class PosProvider extends ChangeNotifier {
   static const double taxRate = 0.10;
+
+  final PosRepository _repository;
+
+  PosProvider({required this._repository});
 
   final List<Product> products = _buildProducts();
   final List<CartItem> _cart = [];
@@ -13,14 +20,40 @@ class PosProvider extends ChangeNotifier {
   String _selectedCategory = 'All';
   AppUser? _currentUser;
 
+  BusinessDay? _currentBusinessDay;
+  Shift? _currentShift;
+  final List<Shift> _shifts = [];
+
+  // ── Init (loads persisted state on startup) ───────────────────────────────────
+
+  Future<void> init() async {
+    _currentBusinessDay = await _repository.loadActiveBusinessDay();
+
+    if (_currentBusinessDay != null) {
+      final shifts =
+          await _repository.loadShiftsForDay(_currentBusinessDay!.id);
+      _shifts
+        ..clear()
+        ..addAll(shifts);
+      _currentShift = _shifts.where((s) => s.isOpen).firstOrNull;
+
+      for (final shift in _shifts) {
+        final txns =
+            await _repository.loadTransactionsForShift(shift.id);
+        _transactions.addAll(txns);
+      }
+      _transactions.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    }
+
+    notifyListeners();
+  }
+
+  // ── User ──────────────────────────────────────────────────────────────────────
+
   List<CartItem> get cart => List.unmodifiable(_cart);
   List<Transaction> get transactions => List.unmodifiable(_transactions);
   String get selectedCategory => _selectedCategory;
   AppUser? get currentUser => _currentUser;
-
-  int get activeReceiptCount => _transactions.where((t) => !t.isVoided).length;
-  double get activeTotalSales =>
-      _transactions.where((t) => !t.isVoided).fold(0.0, (s, t) => s + t.total);
 
   void setUser(AppUser user) {
     _currentUser = user;
@@ -30,10 +63,128 @@ class PosProvider extends ChangeNotifier {
   void logout() {
     _currentUser = null;
     _cart.clear();
-    _transactions.clear();
     _selectedCategory = 'All';
     notifyListeners();
   }
+
+  // ── Business Day ─────────────────────────────────────────────────────────────
+
+  BusinessDay? get currentBusinessDay => _currentBusinessDay;
+  bool get hasActiveBusinessDay => _currentBusinessDay?.isOpen ?? false;
+
+  Future<void> openBusinessDay(AppUser by) async {
+    if (hasActiveBusinessDay) return;
+    final now = DateTime.now();
+    final id =
+        'BD-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final bd = BusinessDay(
+      id: id,
+      openedAt: now,
+      openedByName: by.name,
+      openedById: by.id,
+    );
+    _currentBusinessDay = bd;
+    _shifts.clear();
+    _transactions.clear();
+    _currentShift = null;
+    await _repository.saveBusinessDay(bd);
+    notifyListeners();
+  }
+
+  Future<void> closeBusinessDay(AppUser by) async {
+    if (!hasActiveBusinessDay) return;
+    if (hasActiveShift) return;
+    final closed = _currentBusinessDay!.close(
+      closedByName: by.name,
+      closedById: by.id,
+    );
+    _currentBusinessDay = closed;
+    await _repository.saveBusinessDay(closed);
+    notifyListeners();
+  }
+
+  // ── Shifts ────────────────────────────────────────────────────────────────────
+
+  Shift? get currentShift => _currentShift;
+  List<Shift> get todayShifts => List.unmodifiable(_shifts);
+  bool get hasActiveShift => _currentShift?.isOpen ?? false;
+
+  List<ShiftType> get availableShiftTypes {
+    final used = _shifts.map((s) => s.type).toSet();
+    return ShiftType.values
+        .where((t) => !used.contains(t))
+        .toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+  }
+
+  Future<void> openShift(ShiftType type, AppUser by) async {
+    if (!hasActiveBusinessDay) return;
+    if (hasActiveShift) return;
+    final used = _shifts.map((s) => s.type).toSet();
+    if (used.contains(type)) return;
+
+    final shift = Shift(
+      id: 'SHF-${_shifts.length + 1}',
+      businessDayId: _currentBusinessDay!.id,
+      type: type,
+      openedAt: DateTime.now(),
+      openedByName: by.name,
+      openedById: by.id,
+    );
+    _shifts.add(shift);
+    _currentShift = shift;
+    await _repository.saveShift(shift);
+    notifyListeners();
+  }
+
+  Future<void> closeShift(AppUser by) async {
+    if (!hasActiveShift) return;
+    final closed = _currentShift!.close(
+      closedByName: by.name,
+      closedById: by.id,
+    );
+    final idx = _shifts.indexWhere((s) => s.id == closed.id);
+    if (idx >= 0) _shifts[idx] = closed;
+    _currentShift = closed;
+    await _repository.saveShift(closed);
+    notifyListeners();
+  }
+
+  // ── Stats ─────────────────────────────────────────────────────────────────────
+
+  int get shiftReceiptCount => _transactions
+      .where((t) => !t.isVoided && t.shiftId == _currentShift?.id)
+      .length;
+
+  double get shiftTotalSales => _transactions
+      .where((t) => !t.isVoided && t.shiftId == _currentShift?.id)
+      .fold(0.0, (s, t) => s + t.total);
+
+  int get myReceiptCount => _transactions
+      .where((t) =>
+          !t.isVoided &&
+          t.cashierId == _currentUser?.id &&
+          t.shiftId == _currentShift?.id)
+      .length;
+
+  double get myTotalSales => _transactions
+      .where((t) =>
+          !t.isVoided &&
+          t.cashierId == _currentUser?.id &&
+          t.shiftId == _currentShift?.id)
+      .fold(0.0, (s, t) => s + t.total);
+
+  int get activeReceiptCount => myReceiptCount;
+  double get activeTotalSales => myTotalSales;
+
+  int shiftReceiptCountFor(String shiftId) =>
+      _transactions.where((t) => !t.isVoided && t.shiftId == shiftId).length;
+
+  double shiftTotalSalesFor(String shiftId) => _transactions
+      .where((t) => !t.isVoided && t.shiftId == shiftId)
+      .fold(0.0, (s, t) => s + t.total);
+
+  // ── Cart ──────────────────────────────────────────────────────────────────────
 
   static const List<String> categories = [
     'All',
@@ -86,23 +237,27 @@ class PosProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void voidTransaction(String txnId) {
+  // ── Transactions ──────────────────────────────────────────────────────────────
+
+  Future<void> voidTransaction(String txnId) async {
     final user = _currentUser;
     if (user == null) return;
     final idx = _transactions.indexWhere((t) => t.id == txnId);
     if (idx < 0 || _transactions[idx].isVoided) return;
-    _transactions[idx] = _transactions[idx].voidWith(
+    final voided = _transactions[idx].voidWith(
       voidedByName: user.name,
       voidedById: user.id,
     );
+    _transactions[idx] = voided;
+    await _repository.updateTransactionVoid(voided);
     notifyListeners();
   }
 
-  Transaction processPayment({
+  Future<Transaction> processPayment({
     required TenderType tenderType,
     required double cashAmount,
     required double cardAmount,
-  }) {
+  }) async {
     double change = 0.0;
     if (tenderType == TenderType.cash) {
       change = cashAmount - total;
@@ -121,12 +276,18 @@ class PosProvider extends ChangeNotifier {
       cardAmount: cardAmount,
       change: change < 0 ? 0.0 : change,
       timestamp: DateTime.now(),
+      shiftId: _currentShift?.id,
+      cashierId: _currentUser?.id,
+      cashierName: _currentUser?.name,
     );
 
     _transactions.insert(0, txn);
+    await _repository.insertTransaction(txn);
     clearCart();
     return txn;
   }
+
+  // ── Products ──────────────────────────────────────────────────────────────────
 
   static List<Product> _buildProducts() => [
         const Product(

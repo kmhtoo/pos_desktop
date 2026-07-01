@@ -38,13 +38,9 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
       if (key == '⌫') {
         if (_activeField == _Field.userId) {
-          if (_userIdInput.isNotEmpty) {
-            _userIdInput = _userIdInput.substring(0, _userIdInput.length - 1);
-          }
+          _userIdInput = '';
         } else {
-          if (_codeInput.isNotEmpty) {
-            _codeInput = _codeInput.substring(0, _codeInput.length - 1);
-          }
+          _codeInput = '';
         }
       } else if (key == '↵') {
         if (_activeField == _Field.userId) {
@@ -227,8 +223,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
           const SizedBox(height: 16),
           _buildNumpad(),
-          const SizedBox(height: 14),
-          _buildSignInButton(),
           const SizedBox(height: 16),
           _buildDemoCredentials(),
         ],
@@ -410,42 +404,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }).toList(),
-    );
-  }
-
-  Widget _buildSignInButton() {
-    final canSignIn = _userIdInput.isNotEmpty && _codeInput.isNotEmpty;
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        onPressed: (_isLoading || !canSignIn) ? null : _triggerLogin,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF14B8A6),
-          disabledBackgroundColor: const Color(0xFF1E3A2F).withValues(alpha: 0.4),
-          foregroundColor: Colors.white,
-          disabledForegroundColor: const Color(0xFF475569),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle:
-              const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
-              )
-            : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.login, size: 18),
-                  SizedBox(width: 8),
-                  Text('Sign In'),
-                ],
-              ),
-      ),
     );
   }
 

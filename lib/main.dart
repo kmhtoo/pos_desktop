@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
+import 'data/app_database.dart';
+import 'data/pos_repository.dart';
 import 'providers/pos_provider.dart';
 import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
+
+  // Initialise DB and load persisted state before showing UI
+  final db = AppDatabase();
+  final repository = PosRepository(db);
+  final provider = PosProvider(repository: repository);
+  await provider.init();
 
   const windowOptions = WindowOptions(
     minimumSize: Size(1024, 700),
@@ -24,8 +32,8 @@ void main() async {
   });
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => PosProvider(),
+    ChangeNotifierProvider.value(
+      value: provider,
       child: const POSApp(),
     ),
   );
