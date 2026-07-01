@@ -75,32 +75,79 @@ class _CartList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cart = context.watch<PosProvider>().cart;
-    if (cart.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.shopping_cart_outlined, size: 64, color: Color(0xFF334155)),
-            SizedBox(height: 16),
-            Text(
-              'No items added',
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 16),
-            ),
-            SizedBox(height: 6),
-            Text(
-              'Tap a product to add it',
-              style: TextStyle(color: Color(0xFF475569), fontSize: 13),
-            ),
-          ],
+    final provider = context.watch<PosProvider>();
+    final cart = provider.cart;
+    final hasShift = provider.hasActiveShift;
+    final hasDay = provider.hasActiveBusinessDay;
+
+    return Column(
+      children: [
+        if (!hasShift) _NoShiftBanner(hasDay: hasDay),
+        Expanded(
+          child: cart.isEmpty
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shopping_cart_outlined,
+                          size: 64, color: Color(0xFF334155)),
+                      SizedBox(height: 16),
+                      Text(
+                        'No items added',
+                        style:
+                            TextStyle(color: Color(0xFF94A3B8), fontSize: 16),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Tap a product to add it',
+                        style:
+                            TextStyle(color: Color(0xFF475569), fontSize: 13),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: cart.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) => _CartItemTile(item: cart[i]),
+                ),
         ),
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: cart.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => _CartItemTile(item: cart[index]),
+      ],
+    );
+  }
+}
+
+class _NoShiftBanner extends StatelessWidget {
+  const _NoShiftBanner({required this.hasDay});
+  final bool hasDay;
+
+  @override
+  Widget build(BuildContext context) {
+    final msg = hasDay
+        ? 'No active shift — open a shift in System Info to accept orders'
+        : 'Business day is closed — open the day in System Info';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Color(0xFFF59E0B), size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              msg,
+              style: const TextStyle(
+                color: Color(0xFFF59E0B),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -74,6 +74,7 @@ class _PaymentPanelState extends State<PaymentPanel>
   }
 
   bool _canProcess(PosProvider provider) {
+    if (!provider.hasActiveShift) return false;
     if (provider.cartIsEmpty) return false;
     switch (_tenderType) {
       case TenderType.cash:
@@ -87,7 +88,7 @@ class _PaymentPanelState extends State<PaymentPanel>
     }
   }
 
-  void _processPayment(PosProvider provider) {
+  Future<void> _processPayment(PosProvider provider) async {
     double cashAmount;
     double cardAmount;
 
@@ -106,7 +107,7 @@ class _PaymentPanelState extends State<PaymentPanel>
         break;
     }
 
-    final txn = provider.processPayment(
+    final txn = await provider.processPayment(
       tenderType: _tenderType,
       cashAmount: cashAmount,
       cardAmount: cardAmount,
@@ -117,6 +118,7 @@ class _PaymentPanelState extends State<PaymentPanel>
       _cardInput = '';
     });
 
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,

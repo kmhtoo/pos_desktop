@@ -41,6 +41,9 @@ class Transaction {
   final String? voidedByName;
   final String? voidedById;
   final DateTime? voidedAt;
+  final String? shiftId;
+  final String? cashierId;
+  final String? cashierName;
 
   const Transaction({
     required this.id,
@@ -57,6 +60,9 @@ class Transaction {
     this.voidedByName,
     this.voidedById,
     this.voidedAt,
+    this.shiftId,
+    this.cashierId,
+    this.cashierName,
   });
 
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
@@ -77,6 +83,9 @@ class Transaction {
       voidedByName: voidedByName,
       voidedById: voidedById,
       voidedAt: DateTime.now(),
+      shiftId: shiftId,
+      cashierId: cashierId,
+      cashierName: cashierName,
     );
   }
 }

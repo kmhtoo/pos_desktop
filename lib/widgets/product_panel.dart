@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/pos_provider.dart';
 import '../models/product.dart';
 import '../screens/info_screen.dart';
+import '../screens/system_screen.dart';
 
 class ProductPanel extends StatelessWidget {
   const ProductPanel({super.key});
@@ -25,7 +26,8 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<PosProvider>().currentUser;
+    final provider = context.watch<PosProvider>();
+    final user = provider.currentUser;
     return Container(
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -43,8 +45,21 @@ class _Header extends StatelessWidget {
               letterSpacing: 0.5,
             ),
           ),
+          const SizedBox(width: 16),
+          _ShiftBadge(provider: provider),
           const Spacer(),
           if (user != null) ...[
+            // System info button
+            IconButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SystemScreen()),
+              ),
+              icon: const Icon(Icons.store_outlined, size: 20),
+              color: const Color(0xFF94A3B8),
+              tooltip: 'System Info',
+            ),
+            const SizedBox(width: 4),
+            // User avatar / session info button
             GestureDetector(
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const InfoScreen()),
@@ -100,6 +115,53 @@ class _Header extends StatelessWidget {
           ],
           const _ClockWidget(),
         ],
+      ),
+    );
+  }
+}
+
+class _ShiftBadge extends StatelessWidget {
+  const _ShiftBadge({required this.provider});
+  final PosProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDay = provider.hasActiveBusinessDay;
+    final shift = provider.currentShift;
+    final hasShift = provider.hasActiveShift;
+
+    Color bg;
+    Color fg;
+    String label;
+
+    if (!hasDay) {
+      bg = const Color(0xFFEF4444).withValues(alpha: 0.15);
+      fg = const Color(0xFFEF4444);
+      label = '● Closed';
+    } else if (!hasShift) {
+      bg = const Color(0xFFF59E0B).withValues(alpha: 0.15);
+      fg = const Color(0xFFF59E0B);
+      label = '⚠ No Shift';
+    } else {
+      bg = const Color(0xFF14B8A6).withValues(alpha: 0.15);
+      fg = const Color(0xFF14B8A6);
+      label = '${shift!.emoji} ${shift.name}';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: fg.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
