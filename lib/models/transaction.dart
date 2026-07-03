@@ -1,6 +1,6 @@
 import 'cart_item.dart';
 
-enum TenderType { cash, card, split }
+enum TenderType { cash, card, split, voucher }
 
 extension TenderTypeX on TenderType {
   String get label {
@@ -11,6 +11,8 @@ extension TenderTypeX on TenderType {
         return 'Card';
       case TenderType.split:
         return 'Split';
+      case TenderType.voucher:
+        return 'Voucher';
     }
   }
 
@@ -22,6 +24,8 @@ extension TenderTypeX on TenderType {
         return '💳';
       case TenderType.split:
         return '⚡';
+      case TenderType.voucher:
+        return '🎟️';
     }
   }
 }
@@ -67,7 +71,10 @@ class Transaction {
 
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
 
-  Transaction voidWith({required String voidedByName, required String voidedById}) {
+  Transaction voidWith({
+    required String voidedByName,
+    required String voidedById,
+  }) {
     return Transaction(
       id: id,
       items: items,

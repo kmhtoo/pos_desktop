@@ -3,12 +3,9 @@ import 'package:provider/provider.dart';
 import '../models/user.dart';
 import '../providers/pos_provider.dart';
 import 'pos_screen.dart';
+import '../utils/app_navigation.dart';
 
-const _validCredentials = {
-  '1001': '1234',
-  '1002': '5678',
-  '9999': '0000',
-};
+const _validCredentials = {'1001': '1234', '1002': '5678', '9999': '0000'};
 
 const _userInfo = {
   '1001': ('Alex Chen', 'Cashier'),
@@ -95,9 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
           loginTime: DateTime.now(),
         );
         context.read<PosProvider>().setUser(user);
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const POSScreen()),
-        );
+        pushReplacementAppRoute(context, builder: (_) => const POSScreen());
       }
     } else {
       setState(() {
@@ -318,7 +313,8 @@ class _LoginScreenState extends State<LoginScreen> {
         color: const Color(0xFFEF4444).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-            color: const Color(0xFFEF4444).withValues(alpha: 0.35)),
+          color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+        ),
       ),
       child: Row(
         children: [
@@ -392,10 +388,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: InkWell(
                       onTap: () => _onKey(label),
                       borderRadius: BorderRadius.circular(10),
-                      child: SizedBox(
-                        height: 58,
-                        child: Center(child: child),
-                      ),
+                      child: SizedBox(height: 58, child: Center(child: child)),
                     ),
                   ),
                 ),
@@ -414,7 +407,8 @@ class _LoginScreenState extends State<LoginScreen> {
         color: const Color(0xFF334155).withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-            color: const Color(0xFF475569).withValues(alpha: 0.35)),
+          color: const Color(0xFF475569).withValues(alpha: 0.35),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -447,24 +441,36 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         SizedBox(
           width: 58,
-          child: Text(role,
-              style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+          child: Text(
+            role,
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+          ),
         ),
-        const Text('ID ',
-            style: TextStyle(color: Color(0xFF475569), fontSize: 11)),
-        Text(id,
-            style: const TextStyle(
-                color: Color(0xFF14B8A6),
-                fontSize: 11,
-                fontWeight: FontWeight.w700)),
+        const Text(
+          'ID ',
+          style: TextStyle(color: Color(0xFF475569), fontSize: 11),
+        ),
+        Text(
+          id,
+          style: const TextStyle(
+            color: Color(0xFF14B8A6),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(width: 10),
-        const Text('Code ',
-            style: TextStyle(color: Color(0xFF475569), fontSize: 11)),
-        Text(code,
-            style: const TextStyle(
-                color: Color(0xFF14B8A6),
-                fontSize: 11,
-                fontWeight: FontWeight.w700)),
+        const Text(
+          'Code ',
+          style: TextStyle(color: Color(0xFF475569), fontSize: 11),
+        ),
+        Text(
+          code,
+          style: const TextStyle(
+            color: Color(0xFF14B8A6),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
     );
   }

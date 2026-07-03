@@ -1,10 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'payment_panel.dart';
 import '../providers/pos_provider.dart';
 import '../models/cart_item.dart';
+import '../models/transaction.dart';
 
 class OrderPanel extends StatelessWidget {
   const OrderPanel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Expanded(flex: 2, child: _OrderMainSection()),
+        Container(height: 1, color: const Color(0xFF334155)),
+        const Expanded(flex: 1, child: PaymentPanel()),
+      ],
+    );
+  }
+}
+
+class _OrderMainSection extends StatelessWidget {
+  const _OrderMainSection();
 
   @override
   Widget build(BuildContext context) {
@@ -89,19 +106,26 @@ class _CartList extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.shopping_cart_outlined,
-                          size: 64, color: Color(0xFF334155)),
+                      Icon(
+                        Icons.shopping_cart_outlined,
+                        size: 64,
+                        color: Color(0xFF334155),
+                      ),
                       SizedBox(height: 16),
                       Text(
                         'No items added',
-                        style:
-                            TextStyle(color: Color(0xFF94A3B8), fontSize: 16),
+                        style: TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 16,
+                        ),
                       ),
                       SizedBox(height: 6),
                       Text(
                         'Tap a product to add it',
-                        style:
-                            TextStyle(color: Color(0xFF475569), fontSize: 13),
+                        style: TextStyle(
+                          color: Color(0xFF475569),
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
@@ -133,8 +157,11 @@ class _NoShiftBanner extends StatelessWidget {
       color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded,
-              color: Color(0xFFF59E0B), size: 16),
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFFF59E0B),
+            size: 16,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -176,7 +203,10 @@ class _CartItemTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
-              child: Text(item.product.emoji, style: const TextStyle(fontSize: 20)),
+              child: Text(
+                item.product.emoji,
+                style: const TextStyle(fontSize: 20),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -194,7 +224,10 @@ class _CartItemTile extends StatelessWidget {
                 ),
                 Text(
                   '\$${item.product.price.toStringAsFixed(2)}',
-                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -280,6 +313,10 @@ class _OrderFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PosProvider>();
+    final selectedTender = provider.selectedPaymentMode;
+    final amountTotal = provider.total;
+    final amountDue = provider.amountDueDraft;
+    final change = provider.cashChangeDraft;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: const BoxDecoration(
@@ -314,6 +351,43 @@ class _OrderFooter extends StatelessWidget {
               ),
             ],
           ),
+          const Divider(color: Color(0xFF334155), height: 18),
+          Row(
+            children: [
+              const Text(
+                'Tender',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+              ),
+              const Spacer(),
+              Text(
+                '${selectedTender.emoji} ${selectedTender.label}',
+                style: const TextStyle(
+                  color: Color(0xFFCBD5E1),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _SummaryRow('Amount Total', amountTotal),
+          const SizedBox(height: 4),
+          _SummaryRow(
+            'Amount Due',
+            amountDue,
+            valueColor: const Color(0xFF22C55E),
+            bold: true,
+          ),
+          if (selectedTender == TenderType.cash &&
+              provider.cashTenderedDraft > 0) ...[
+            const SizedBox(height: 4),
+            _SummaryRow(
+              'Change',
+              change,
+              valueColor: const Color(0xFF22C55E),
+              bold: true,
+            ),
+          ],
         ],
       ),
     );
@@ -321,20 +395,38 @@ class _OrderFooter extends StatelessWidget {
 }
 
 class _SummaryRow extends StatelessWidget {
-  const _SummaryRow(this.label, this.amount);
+  const _SummaryRow(
+    this.label,
+    this.amount, {
+    this.valueColor,
+    this.bold = false,
+  });
 
   final String label;
   final double amount;
+  final Color? valueColor;
+  final bool bold;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+        Text(
+          label,
+          style: TextStyle(
+            color: const Color(0xFF94A3B8),
+            fontSize: 13,
+            fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
         const Spacer(),
         Text(
           '\$${amount.toStringAsFixed(2)}',
-          style: const TextStyle(color: Colors.white, fontSize: 13),
+          style: TextStyle(
+            color: valueColor ?? Colors.white,
+            fontSize: 13,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+          ),
         ),
       ],
     );

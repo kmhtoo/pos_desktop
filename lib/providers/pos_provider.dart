@@ -18,7 +18,13 @@ class PosProvider extends ChangeNotifier {
   final List<CartItem> _cart = [];
   final List<Transaction> _transactions = [];
   String _selectedCategory = 'All';
+  TenderType _selectedPaymentMode = TenderType.cash;
+  double _cashTenderedDraft = 0.0;
+  double _cardTenderedDraft = 0.0;
+  String _voucherCodeDraft = '';
   AppUser? _currentUser;
+  bool _useAnimatedPageTransitions = true;
+  bool _oneTapPaymentEnabled = true;
 
   BusinessDay? _currentBusinessDay;
   Shift? _currentShift;
@@ -30,16 +36,16 @@ class PosProvider extends ChangeNotifier {
     _currentBusinessDay = await _repository.loadActiveBusinessDay();
 
     if (_currentBusinessDay != null) {
-      final shifts =
-          await _repository.loadShiftsForDay(_currentBusinessDay!.id);
+      final shifts = await _repository.loadShiftsForDay(
+        _currentBusinessDay!.id,
+      );
       _shifts
         ..clear()
         ..addAll(shifts);
       _currentShift = _shifts.where((s) => s.isOpen).firstOrNull;
 
       for (final shift in _shifts) {
-        final txns =
-            await _repository.loadTransactionsForShift(shift.id);
+        final txns = await _repository.loadTransactionsForShift(shift.id);
         _transactions.addAll(txns);
       }
       _transactions.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -53,7 +59,24 @@ class PosProvider extends ChangeNotifier {
   List<CartItem> get cart => List.unmodifiable(_cart);
   List<Transaction> get transactions => List.unmodifiable(_transactions);
   String get selectedCategory => _selectedCategory;
+  TenderType get selectedPaymentMode => _selectedPaymentMode;
+  List<TenderType> get paymentModes => TenderType.values;
+  double get cashTenderedDraft => _cashTenderedDraft;
+  double get cardTenderedDraft => _cardTenderedDraft;
+  String get voucherCodeDraft => _voucherCodeDraft;
+  double get tenderedAmountDraft => switch (_selectedPaymentMode) {
+    TenderType.cash => _cashTenderedDraft,
+    TenderType.split => _cardTenderedDraft,
+    TenderType.voucher => _voucherCodeDraft.isEmpty ? 0.0 : total,
+    TenderType.card => 0.0,
+  };
+  double get amountDueDraft =>
+      (total - tenderedAmountDraft).clamp(0.0, double.infinity);
+  double get cashChangeDraft =>
+      (_cashTenderedDraft - total).clamp(0.0, double.infinity);
   AppUser? get currentUser => _currentUser;
+  bool get useAnimatedPageTransitions => _useAnimatedPageTransitions;
+  bool get oneTapPaymentEnabled => _oneTapPaymentEnabled;
 
   void setUser(AppUser user) {
     _currentUser = user;
@@ -64,6 +87,21 @@ class PosProvider extends ChangeNotifier {
     _currentUser = null;
     _cart.clear();
     _selectedCategory = 'All';
+    _cashTenderedDraft = 0.0;
+    _cardTenderedDraft = 0.0;
+    _voucherCodeDraft = '';
+    notifyListeners();
+  }
+
+  void setUseAnimatedPageTransitions(bool value) {
+    if (_useAnimatedPageTransitions == value) return;
+    _useAnimatedPageTransitions = value;
+    notifyListeners();
+  }
+
+  void setOneTapPaymentEnabled(bool value) {
+    if (_oneTapPaymentEnabled == value) return;
+    _oneTapPaymentEnabled = value;
     notifyListeners();
   }
 
@@ -111,9 +149,7 @@ class PosProvider extends ChangeNotifier {
 
   List<ShiftType> get availableShiftTypes {
     final used = _shifts.map((s) => s.type).toSet();
-    return ShiftType.values
-        .where((t) => !used.contains(t))
-        .toList()
+    return ShiftType.values.where((t) => !used.contains(t)).toList()
       ..sort((a, b) => a.order.compareTo(b.order));
   }
 
@@ -161,17 +197,21 @@ class PosProvider extends ChangeNotifier {
       .fold(0.0, (s, t) => s + t.total);
 
   int get myReceiptCount => _transactions
-      .where((t) =>
-          !t.isVoided &&
-          t.cashierId == _currentUser?.id &&
-          t.shiftId == _currentShift?.id)
+      .where(
+        (t) =>
+            !t.isVoided &&
+            t.cashierId == _currentUser?.id &&
+            t.shiftId == _currentShift?.id,
+      )
       .length;
 
   double get myTotalSales => _transactions
-      .where((t) =>
-          !t.isVoided &&
-          t.cashierId == _currentUser?.id &&
-          t.shiftId == _currentShift?.id)
+      .where(
+        (t) =>
+            !t.isVoided &&
+            t.cashierId == _currentUser?.id &&
+            t.shiftId == _currentShift?.id,
+      )
       .fold(0.0, (s, t) => s + t.total);
 
   int get activeReceiptCount => myReceiptCount;
@@ -209,6 +249,42 @@ class PosProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectPaymentMode(TenderType mode) {
+    if (_selectedPaymentMode == mode) return;
+    _selectedPaymentMode = mode;
+    notifyListeners();
+  }
+
+  void setCashTenderedDraft(double amount) {
+    if (_cashTenderedDraft == amount) return;
+    _cashTenderedDraft = amount;
+    notifyListeners();
+  }
+
+  void setCardTenderedDraft(double amount) {
+    if (_cardTenderedDraft == amount) return;
+    _cardTenderedDraft = amount;
+    notifyListeners();
+  }
+
+  void setVoucherCodeDraft(String code) {
+    if (_voucherCodeDraft == code) return;
+    _voucherCodeDraft = code;
+    notifyListeners();
+  }
+
+  void clearPaymentDrafts() {
+    if (_cashTenderedDraft == 0.0 &&
+        _cardTenderedDraft == 0.0 &&
+        _voucherCodeDraft.isEmpty) {
+      return;
+    }
+    _cashTenderedDraft = 0.0;
+    _cardTenderedDraft = 0.0;
+    _voucherCodeDraft = '';
+    notifyListeners();
+  }
+
   void addToCart(Product product) {
     final idx = _cart.indexWhere((i) => i.product.id == product.id);
     if (idx >= 0) {
@@ -234,6 +310,9 @@ class PosProvider extends ChangeNotifier {
 
   void clearCart() {
     _cart.clear();
+    _cashTenderedDraft = 0.0;
+    _cardTenderedDraft = 0.0;
+    _voucherCodeDraft = '';
     notifyListeners();
   }
 
@@ -290,180 +369,205 @@ class PosProvider extends ChangeNotifier {
   // ── Products ──────────────────────────────────────────────────────────────────
 
   static List<Product> _buildProducts() => [
-        const Product(
-            id: 'bev1',
-            name: 'Espresso',
-            price: 2.50,
-            category: 'Beverages',
-            color: Color(0xFF6F4E37),
-            emoji: '☕'),
-        const Product(
-            id: 'bev2',
-            name: 'Latte',
-            price: 4.50,
-            category: 'Beverages',
-            color: Color(0xFFC8A882),
-            emoji: '☕'),
-        const Product(
-            id: 'bev3',
-            name: 'Cappuccino',
-            price: 4.00,
-            category: 'Beverages',
-            color: Color(0xFFD2691E),
-            emoji: '☕'),
-        const Product(
-            id: 'bev4',
-            name: 'Cold Brew',
-            price: 5.00,
-            category: 'Beverages',
-            color: Color(0xFF3E1C00),
-            emoji: '🧊'),
-        const Product(
-            id: 'bev5',
-            name: 'Green Tea',
-            price: 3.00,
-            category: 'Beverages',
-            color: Color(0xFF4CAF50),
-            emoji: '🍵'),
-        const Product(
-            id: 'bev6',
-            name: 'Orange Juice',
-            price: 3.50,
-            category: 'Beverages',
-            color: Color(0xFFFF9800),
-            emoji: '🍊'),
-        const Product(
-            id: 'bev7',
-            name: 'Smoothie',
-            price: 5.50,
-            category: 'Beverages',
-            color: Color(0xFFE91E63),
-            emoji: '🥤'),
-        const Product(
-            id: 'bev8',
-            name: 'Water',
-            price: 1.50,
-            category: 'Beverages',
-            color: Color(0xFF2196F3),
-            emoji: '💧'),
-        const Product(
-            id: 'food1',
-            name: 'Sandwich',
-            price: 6.50,
-            category: 'Food',
-            color: Color(0xFFFF8F00),
-            emoji: '🥪'),
-        const Product(
-            id: 'food2',
-            name: 'Burger',
-            price: 9.00,
-            category: 'Food',
-            color: Color(0xFFBF360C),
-            emoji: '🍔'),
-        const Product(
-            id: 'food3',
-            name: 'Pizza Slice',
-            price: 4.50,
-            category: 'Food',
-            color: Color(0xFFE53935),
-            emoji: '🍕'),
-        const Product(
-            id: 'food4',
-            name: 'Caesar Salad',
-            price: 7.50,
-            category: 'Food',
-            color: Color(0xFF388E3C),
-            emoji: '🥗'),
-        const Product(
-            id: 'food5',
-            name: 'Pasta',
-            price: 10.00,
-            category: 'Food',
-            color: Color(0xFFFBC02D),
-            emoji: '🍝'),
-        const Product(
-            id: 'food6',
-            name: 'Wrap',
-            price: 7.00,
-            category: 'Food',
-            color: Color(0xFFF57C00),
-            emoji: '🌯'),
-        const Product(
-            id: 'snk1',
-            name: 'Chips',
-            price: 2.00,
-            category: 'Snacks',
-            color: Color(0xFFFFCA28),
-            emoji: '🥔'),
-        const Product(
-            id: 'snk2',
-            name: 'Granola Bar',
-            price: 2.50,
-            category: 'Snacks',
-            color: Color(0xFF8D6E63),
-            emoji: '🍫'),
-        const Product(
-            id: 'snk3',
-            name: 'Pretzel',
-            price: 2.00,
-            category: 'Snacks',
-            color: Color(0xFFD4A017),
-            emoji: '🥨'),
-        const Product(
-            id: 'snk4',
-            name: 'Mixed Nuts',
-            price: 3.50,
-            category: 'Snacks',
-            color: Color(0xFF795548),
-            emoji: '🥜'),
-        const Product(
-            id: 'snk5',
-            name: 'Popcorn',
-            price: 2.50,
-            category: 'Snacks',
-            color: Color(0xFFFFF176),
-            emoji: '🍿'),
-        const Product(
-            id: 'des1',
-            name: 'Cheesecake',
-            price: 5.50,
-            category: 'Desserts',
-            color: Color(0xFFFFCC80),
-            emoji: '🍰'),
-        const Product(
-            id: 'des2',
-            name: 'Brownie',
-            price: 3.00,
-            category: 'Desserts',
-            color: Color(0xFF4E342E),
-            emoji: '🍫'),
-        const Product(
-            id: 'des3',
-            name: 'Cookie',
-            price: 1.50,
-            category: 'Desserts',
-            color: Color(0xFFD4A017),
-            emoji: '🍪'),
-        const Product(
-            id: 'des4',
-            name: 'Ice Cream',
-            price: 4.00,
-            category: 'Desserts',
-            color: Color(0xFFFFCDD2),
-            emoji: '🍦'),
-        const Product(
-            id: 'des5',
-            name: 'Donut',
-            price: 2.50,
-            category: 'Desserts',
-            color: Color(0xFFFF80AB),
-            emoji: '🍩'),
-        const Product(
-            id: 'des6',
-            name: 'Muffin',
-            price: 3.00,
-            category: 'Desserts',
-            color: Color(0xFFBCAAA4),
-            emoji: '🧁'),
-      ];
+    const Product(
+      id: 'bev1',
+      name: 'Espresso',
+      price: 2.50,
+      category: 'Beverages',
+      color: Color(0xFF6F4E37),
+      emoji: '☕',
+    ),
+    const Product(
+      id: 'bev2',
+      name: 'Latte',
+      price: 4.50,
+      category: 'Beverages',
+      color: Color(0xFFC8A882),
+      emoji: '☕',
+    ),
+    const Product(
+      id: 'bev3',
+      name: 'Cappuccino',
+      price: 4.00,
+      category: 'Beverages',
+      color: Color(0xFFD2691E),
+      emoji: '☕',
+    ),
+    const Product(
+      id: 'bev4',
+      name: 'Cold Brew',
+      price: 5.00,
+      category: 'Beverages',
+      color: Color(0xFF3E1C00),
+      emoji: '🧊',
+    ),
+    const Product(
+      id: 'bev5',
+      name: 'Green Tea',
+      price: 3.00,
+      category: 'Beverages',
+      color: Color(0xFF4CAF50),
+      emoji: '🍵',
+    ),
+    const Product(
+      id: 'bev6',
+      name: 'Orange Juice',
+      price: 3.50,
+      category: 'Beverages',
+      color: Color(0xFFFF9800),
+      emoji: '🍊',
+    ),
+    const Product(
+      id: 'bev7',
+      name: 'Smoothie',
+      price: 5.50,
+      category: 'Beverages',
+      color: Color(0xFFE91E63),
+      emoji: '🥤',
+    ),
+    const Product(
+      id: 'bev8',
+      name: 'Water',
+      price: 1.50,
+      category: 'Beverages',
+      color: Color(0xFF2196F3),
+      emoji: '💧',
+    ),
+    const Product(
+      id: 'food1',
+      name: 'Sandwich',
+      price: 6.50,
+      category: 'Food',
+      color: Color(0xFFFF8F00),
+      emoji: '🥪',
+    ),
+    const Product(
+      id: 'food2',
+      name: 'Burger',
+      price: 9.00,
+      category: 'Food',
+      color: Color(0xFFBF360C),
+      emoji: '🍔',
+    ),
+    const Product(
+      id: 'food3',
+      name: 'Pizza Slice',
+      price: 4.50,
+      category: 'Food',
+      color: Color(0xFFE53935),
+      emoji: '🍕',
+    ),
+    const Product(
+      id: 'food4',
+      name: 'Caesar Salad',
+      price: 7.50,
+      category: 'Food',
+      color: Color(0xFF388E3C),
+      emoji: '🥗',
+    ),
+    const Product(
+      id: 'food5',
+      name: 'Pasta',
+      price: 10.00,
+      category: 'Food',
+      color: Color(0xFFFBC02D),
+      emoji: '🍝',
+    ),
+    const Product(
+      id: 'food6',
+      name: 'Wrap',
+      price: 7.00,
+      category: 'Food',
+      color: Color(0xFFF57C00),
+      emoji: '🌯',
+    ),
+    const Product(
+      id: 'snk1',
+      name: 'Chips',
+      price: 2.00,
+      category: 'Snacks',
+      color: Color(0xFFFFCA28),
+      emoji: '🥔',
+    ),
+    const Product(
+      id: 'snk2',
+      name: 'Granola Bar',
+      price: 2.50,
+      category: 'Snacks',
+      color: Color(0xFF8D6E63),
+      emoji: '🍫',
+    ),
+    const Product(
+      id: 'snk3',
+      name: 'Pretzel',
+      price: 2.00,
+      category: 'Snacks',
+      color: Color(0xFFD4A017),
+      emoji: '🥨',
+    ),
+    const Product(
+      id: 'snk4',
+      name: 'Mixed Nuts',
+      price: 3.50,
+      category: 'Snacks',
+      color: Color(0xFF795548),
+      emoji: '🥜',
+    ),
+    const Product(
+      id: 'snk5',
+      name: 'Popcorn',
+      price: 2.50,
+      category: 'Snacks',
+      color: Color(0xFFFFF176),
+      emoji: '🍿',
+    ),
+    const Product(
+      id: 'des1',
+      name: 'Cheesecake',
+      price: 5.50,
+      category: 'Desserts',
+      color: Color(0xFFFFCC80),
+      emoji: '🍰',
+    ),
+    const Product(
+      id: 'des2',
+      name: 'Brownie',
+      price: 3.00,
+      category: 'Desserts',
+      color: Color(0xFF4E342E),
+      emoji: '🍫',
+    ),
+    const Product(
+      id: 'des3',
+      name: 'Cookie',
+      price: 1.50,
+      category: 'Desserts',
+      color: Color(0xFFD4A017),
+      emoji: '🍪',
+    ),
+    const Product(
+      id: 'des4',
+      name: 'Ice Cream',
+      price: 4.00,
+      category: 'Desserts',
+      color: Color(0xFFFFCDD2),
+      emoji: '🍦',
+    ),
+    const Product(
+      id: 'des5',
+      name: 'Donut',
+      price: 2.50,
+      category: 'Desserts',
+      color: Color(0xFFFF80AB),
+      emoji: '🍩',
+    ),
+    const Product(
+      id: 'des6',
+      name: 'Muffin',
+      price: 3.00,
+      category: 'Desserts',
+      color: Color(0xFFBCAAA4),
+      emoji: '🧁',
+    ),
+  ];
 }

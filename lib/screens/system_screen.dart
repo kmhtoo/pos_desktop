@@ -42,20 +42,24 @@ class SystemScreen extends StatelessWidget {
               _SectionLabel(label: 'CURRENT SHIFT'),
               const SizedBox(height: 8),
               _ShiftCard(provider: provider, fmt: _fmt),
+              const SizedBox(height: 20),
+              _SectionLabel(label: 'APP SETTINGS'),
+              const SizedBox(height: 8),
+              _AppSettingsCard(provider: provider),
               if (provider.todayShifts.any((s) => !s.isOpen)) ...[
                 const SizedBox(height: 20),
                 _SectionLabel(label: "TODAY'S SHIFTS"),
                 const SizedBox(height: 8),
                 ...provider.todayShifts
                     .where((s) => !s.isOpen)
-                    .map((s) => _PastShiftTile(
-                          shift: s,
-                          receiptCount:
-                              provider.shiftReceiptCountFor(s.id),
-                          totalSales:
-                              provider.shiftTotalSalesFor(s.id),
-                          fmt: _fmt,
-                        )),
+                    .map(
+                      (s) => _PastShiftTile(
+                        shift: s,
+                        receiptCount: provider.shiftReceiptCountFor(s.id),
+                        totalSales: provider.shiftTotalSalesFor(s.id),
+                        fmt: _fmt,
+                      ),
+                    ),
               ],
             ],
           );
@@ -162,8 +166,7 @@ class _BusinessDayCard extends StatelessWidget {
             width: double.infinity,
             child: isOpen
                 ? OutlinedButton.icon(
-                    onPressed: () =>
-                        _confirmCloseDay(context, provider),
+                    onPressed: () => _confirmCloseDay(context, provider),
                     icon: const Icon(Icons.lock_outline, size: 16),
                     label: const Text('Close Business Day'),
                     style: OutlinedButton.styleFrom(
@@ -218,7 +221,9 @@ class _BusinessDayCard extends StatelessWidget {
     if (provider.hasActiveShift) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Close the active shift before closing the business day.'),
+          content: Text(
+            'Close the active shift before closing the business day.',
+          ),
           backgroundColor: Color(0xFFEF4444),
         ),
       );
@@ -279,9 +284,7 @@ class _ShiftCard extends StatelessWidget {
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasShift
-              ? const Color(0xFF14B8A6)
-              : const Color(0xFF334155),
+          color: hasShift ? const Color(0xFF14B8A6) : const Color(0xFF334155),
         ),
       ),
       child: Column(
@@ -290,10 +293,7 @@ class _ShiftCard extends StatelessWidget {
           if (shift != null) ...[
             Row(
               children: [
-                Text(
-                  shift.emoji,
-                  style: const TextStyle(fontSize: 20),
-                ),
+                Text(shift.emoji, style: const TextStyle(fontSize: 20)),
                 const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,16 +366,19 @@ class _ShiftCard extends StatelessWidget {
                 runSpacing: 8,
                 children: available.map((type) {
                   return ElevatedButton.icon(
-                    onPressed: () =>
-                        _confirmOpenShift(context, provider, type),
-                    icon: Text(type.emoji,
-                        style: const TextStyle(fontSize: 14)),
+                    onPressed: () => _confirmOpenShift(context, provider, type),
+                    icon: Text(
+                      type.emoji,
+                      style: const TextStyle(fontSize: 14),
+                    ),
                     label: Text(type.label),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF14B8A6),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -394,8 +397,7 @@ class _ShiftCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () =>
-                    _confirmCloseShift(context, provider, shift!),
+                onPressed: () => _confirmCloseShift(context, provider, shift!),
                 icon: const Icon(Icons.stop_circle_outlined, size: 16),
                 label: const Text('Close Shift'),
                 style: OutlinedButton.styleFrom(
@@ -415,7 +417,10 @@ class _ShiftCard extends StatelessWidget {
   }
 
   void _confirmOpenShift(
-      BuildContext context, PosProvider provider, ShiftType type) {
+    BuildContext context,
+    PosProvider provider,
+    ShiftType type,
+  ) {
     final user = provider.currentUser;
     if (user == null) return;
     showDialog(
@@ -434,7 +439,10 @@ class _ShiftCard extends StatelessWidget {
   }
 
   void _confirmCloseShift(
-      BuildContext context, PosProvider provider, Shift shift) {
+    BuildContext context,
+    PosProvider provider,
+    Shift shift,
+  ) {
     final user = provider.currentUser;
     if (user == null) return;
     final count = provider.shiftReceiptCount;
@@ -495,8 +503,7 @@ class _PastShiftTile extends StatelessWidget {
               ),
               Text(
                 '${fmt(shift.openedAt)} – ${shift.closedAt != null ? fmt(shift.closedAt!) : '—'}',
-                style:
-                    const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
               ),
             ],
           ),
@@ -514,13 +521,109 @@ class _PastShiftTile extends StatelessWidget {
               ),
               Text(
                 '$receiptCount receipt${receiptCount != 1 ? 's' : ''}',
-                style:
-                    const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AppSettingsCard extends StatelessWidget {
+  const _AppSettingsCard({required this.provider});
+
+  final PosProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        children: [
+          _SettingToggleTile(
+            icon: Icons.animation_outlined,
+            label: 'Page Transition Animation',
+            description: 'Enable or disable page change animation.',
+            value: provider.useAnimatedPageTransitions,
+            onChanged: provider.setUseAnimatedPageTransitions,
+          ),
+          const Divider(color: Color(0xFF334155), height: 20),
+          _SettingToggleTile(
+            icon: Icons.flash_on_outlined,
+            label: 'One-tap Payment Shortcuts',
+            description: 'Allow one tap payment for exact cash and card.',
+            value: provider.oneTapPaymentEnabled,
+            onChanged: provider.setOneTapPaymentEnabled,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingToggleTile extends StatelessWidget {
+  const _SettingToggleTile({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFF334155),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: const Color(0xFF94A3B8), size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          activeThumbColor: const Color(0xFF14B8A6),
+          activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }
@@ -538,8 +641,7 @@ class _InfoRow extends StatelessWidget {
         children: [
           Text(
             '$label:',
-            style:
-                const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
           ),
           const SizedBox(width: 6),
           Expanded(

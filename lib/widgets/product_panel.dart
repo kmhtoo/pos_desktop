@@ -5,6 +5,8 @@ import '../providers/pos_provider.dart';
 import '../models/product.dart';
 import '../screens/info_screen.dart';
 import '../screens/system_screen.dart';
+import '../utils/app_navigation.dart';
+import 'payment_mode_dock.dart';
 
 class ProductPanel extends StatelessWidget {
   const ProductPanel({super.key});
@@ -16,6 +18,7 @@ class ProductPanel extends StatelessWidget {
         _Header(),
         _CategoryBar(),
         Expanded(child: _ProductGrid()),
+        PaymentModeDock(),
       ],
     );
   }
@@ -51,9 +54,8 @@ class _Header extends StatelessWidget {
           if (user != null) ...[
             // System info button
             IconButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SystemScreen()),
-              ),
+              onPressed: () =>
+                  pushAppRoute(context, builder: (_) => const SystemScreen()),
               icon: const Icon(Icons.store_outlined, size: 20),
               color: const Color(0xFF94A3B8),
               tooltip: 'System Info',
@@ -61,12 +63,13 @@ class _Header extends StatelessWidget {
             const SizedBox(width: 4),
             // User avatar / session info button
             GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const InfoScreen()),
-              ),
+              onTap: () =>
+                  pushAppRoute(context, builder: (_) => const InfoScreen()),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF334155),
                   borderRadius: BorderRadius.circular(24),
@@ -157,11 +160,7 @@ class _ShiftBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: fg,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+        style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -198,7 +197,8 @@ class _ClockWidgetState extends State<_ClockWidget> {
     final h = _now.hour.toString().padLeft(2, '0');
     final m = _now.minute.toString().padLeft(2, '0');
     final s = _now.second.toString().padLeft(2, '0');
-    final d = '${_now.day.toString().padLeft(2, '0')}/'
+    final d =
+        '${_now.day.toString().padLeft(2, '0')}/'
         '${_now.month.toString().padLeft(2, '0')}/'
         '${_now.year}';
     return Column(
@@ -220,11 +220,11 @@ class _ClockWidgetState extends State<_ClockWidget> {
 }
 
 const _categoryMeta = {
-  'All':       (Icons.apps_rounded,      Color(0xFF14B8A6)),
+  'All': (Icons.apps_rounded, Color(0xFF14B8A6)),
   'Beverages': (Icons.local_cafe_rounded, Color(0xFF2196F3)),
-  'Food':      (Icons.lunch_dining,      Color(0xFFFF8F00)),
-  'Snacks':    (Icons.cookie_outlined,   Color(0xFFFFCA28)),
-  'Desserts':  (Icons.cake_outlined,     Color(0xFFE91E63)),
+  'Food': (Icons.lunch_dining, Color(0xFFFF8F00)),
+  'Snacks': (Icons.cookie_outlined, Color(0xFFFFCA28)),
+  'Desserts': (Icons.cake_outlined, Color(0xFFE91E63)),
 };
 
 class _CategoryBar extends StatelessWidget {
@@ -251,7 +251,10 @@ class _CategoryBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: selected
                       ? color.withValues(alpha: 0.15)
@@ -275,7 +278,9 @@ class _CategoryBar extends StatelessWidget {
                       cat,
                       style: TextStyle(
                         color: selected ? color : const Color(0xFF94A3B8),
-                        fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: selected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                         fontSize: 11,
                       ),
                     ),
@@ -338,7 +343,10 @@ class _ProductCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Center(
-                  child: Text(product.emoji, style: const TextStyle(fontSize: 30)),
+                  child: Text(
+                    product.emoji,
+                    style: const TextStyle(fontSize: 30),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
