@@ -310,6 +310,16 @@ class _QtyButton extends StatelessWidget {
 class _OrderFooter extends StatelessWidget {
   const _OrderFooter();
 
+  String _cashDenominationLabel(double amount) {
+    if (amount < 1) {
+      return '${(amount * 100).round()}¢';
+    }
+    if (amount == amount.truncateToDouble()) {
+      return '\$${amount.toInt()}';
+    }
+    return '\$${amount.toStringAsFixed(2)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PosProvider>();
@@ -317,6 +327,7 @@ class _OrderFooter extends StatelessWidget {
     final amountTotal = provider.total;
     final amountDue = provider.amountDueDraft;
     final change = provider.cashChangeDraft;
+    final cashTenderLines = provider.cashTenderLinesDraft;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: const BoxDecoration(
@@ -369,6 +380,23 @@ class _OrderFooter extends StatelessWidget {
               ),
             ],
           ),
+          if (selectedTender == TenderType.cash && cashTenderLines.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...cashTenderLines.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: _CashTenderRow(
+                  label: '${_cashDenominationLabel(line.key)} x ${line.value}',
+                  amount: line.key * line.value,
+                  onRemove: () =>
+                      context.read<PosProvider>().removeCashDenominationDraft(
+                        line.key,
+                      ),
+                  removeKey: Key('remove-tender-${line.key}'),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 4),
           _SummaryRow('Amount Total', amountTotal),
           const SizedBox(height: 4),
@@ -427,6 +455,43 @@ class _SummaryRow extends StatelessWidget {
             fontSize: 13,
             fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CashTenderRow extends StatelessWidget {
+  const _CashTenderRow({
+    required this.label,
+    required this.amount,
+    required this.onRemove,
+    required this.removeKey,
+  });
+
+  final String label;
+  final double amount;
+  final VoidCallback onRemove;
+  final Key removeKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+        ),
+        const Spacer(),
+        Text(
+          '\$${amount.toStringAsFixed(2)}',
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+        ),
+        const SizedBox(width: 6),
+        GestureDetector(
+          key: removeKey,
+          onTap: onRemove,
+          child: const Icon(Icons.close, color: Color(0xFF64748B), size: 16),
         ),
       ],
     );

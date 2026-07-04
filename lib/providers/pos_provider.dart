@@ -9,6 +9,20 @@ import '../data/pos_repository.dart';
 
 class PosProvider extends ChangeNotifier {
   static const double taxRate = 0.10;
+  static const List<double> supportedCashDenominations = [
+    10000.0,
+    1000.0,
+    100.0,
+    50.0,
+    10.0,
+    5.0,
+    2.0,
+    1.0,
+    0.50,
+    0.20,
+    0.10,
+    0.05,
+  ];
 
   final PosRepository _repository;
 
@@ -19,12 +33,20 @@ class PosProvider extends ChangeNotifier {
   final List<Transaction> _transactions = [];
   String _selectedCategory = 'All';
   TenderType _selectedPaymentMode = TenderType.cash;
+  bool _showPaymentHistory = false;
   double _cashTenderedDraft = 0.0;
   double _cardTenderedDraft = 0.0;
   String _voucherCodeDraft = '';
+  final Map<double, int> _cashDenominationCounts = {};
   AppUser? _currentUser;
-  bool _useAnimatedPageTransitions = true;
+  bool _useAnimatedPageTransitions = false;
   bool _oneTapPaymentEnabled = true;
+  final Map<double, bool> _cashDenominationVisible = {
+    for (final d in supportedCashDenominations) d: true,
+  };
+  final Map<double, bool> _cashDenominationEnabled = {
+    for (final d in supportedCashDenominations) d: true,
+  };
 
   BusinessDay? _currentBusinessDay;
   Shift? _currentShift;
@@ -60,10 +82,21 @@ class PosProvider extends ChangeNotifier {
   List<Transaction> get transactions => List.unmodifiable(_transactions);
   String get selectedCategory => _selectedCategory;
   TenderType get selectedPaymentMode => _selectedPaymentMode;
-  List<TenderType> get paymentModes => TenderType.values;
+  bool get showPaymentHistory => _showPaymentHistory;
+  List<TenderType> get paymentModes =>
+      TenderType.values.where((mode) => mode != TenderType.split).toList();
   double get cashTenderedDraft => _cashTenderedDraft;
   double get cardTenderedDraft => _cardTenderedDraft;
   String get voucherCodeDraft => _voucherCodeDraft;
+  List<MapEntry<double, int>> get cashTenderLinesDraft {
+    final lines = _cashDenominationCounts.entries
+        .where((entry) => entry.value > 0)
+        .toList()
+      ..sort((a, b) => b.key.compareTo(a.key));
+    return List.unmodifiable(lines);
+  }
+  int cashTenderCountFor(double denomination) =>
+      _cashDenominationCounts[denomination] ?? 0;
   double get tenderedAmountDraft => switch (_selectedPaymentMode) {
     TenderType.cash => _cashTenderedDraft,
     TenderType.split => _cardTenderedDraft,
@@ -77,6 +110,13 @@ class PosProvider extends ChangeNotifier {
   AppUser? get currentUser => _currentUser;
   bool get useAnimatedPageTransitions => _useAnimatedPageTransitions;
   bool get oneTapPaymentEnabled => _oneTapPaymentEnabled;
+  bool isCashDenominationVisible(double denomination) =>
+      _cashDenominationVisible[denomination] ?? true;
+  bool isCashDenominationEnabled(double denomination) =>
+      _cashDenominationEnabled[denomination] ?? true;
+  List<double> get visibleCashDenominations => supportedCashDenominations
+      .where((d) => _cashDenominationVisible[d] ?? true)
+      .toList();
 
   void setUser(AppUser user) {
     _currentUser = user;
@@ -87,9 +127,11 @@ class PosProvider extends ChangeNotifier {
     _currentUser = null;
     _cart.clear();
     _selectedCategory = 'All';
+    _showPaymentHistory = false;
     _cashTenderedDraft = 0.0;
     _cardTenderedDraft = 0.0;
     _voucherCodeDraft = '';
+    _cashDenominationCounts.clear();
     notifyListeners();
   }
 
@@ -102,6 +144,20 @@ class PosProvider extends ChangeNotifier {
   void setOneTapPaymentEnabled(bool value) {
     if (_oneTapPaymentEnabled == value) return;
     _oneTapPaymentEnabled = value;
+    notifyListeners();
+  }
+
+  void setCashDenominationVisibility(double denomination, bool visible) {
+    if (!_cashDenominationVisible.containsKey(denomination)) return;
+    if (_cashDenominationVisible[denomination] == visible) return;
+    _cashDenominationVisible[denomination] = visible;
+    notifyListeners();
+  }
+
+  void setCashDenominationEnabled(double denomination, bool enabled) {
+    if (!_cashDenominationEnabled.containsKey(denomination)) return;
+    if (_cashDenominationEnabled[denomination] == enabled) return;
+    _cashDenominationEnabled[denomination] = enabled;
     notifyListeners();
   }
 
@@ -250,14 +306,48 @@ class PosProvider extends ChangeNotifier {
   }
 
   void selectPaymentMode(TenderType mode) {
-    if (_selectedPaymentMode == mode) return;
+    if (_selectedPaymentMode == mode && !_showPaymentHistory) return;
     _selectedPaymentMode = mode;
+    _showPaymentHistory = false;
+    notifyListeners();
+  }
+
+  void showPaymentHistoryView() {
+    if (_showPaymentHistory) return;
+    _showPaymentHistory = true;
     notifyListeners();
   }
 
   void setCashTenderedDraft(double amount) {
-    if (_cashTenderedDraft == amount) return;
-    _cashTenderedDraft = amount;
+    final normalized = _asMoney(amount);
+    if (_cashTenderedDraft == normalized && _cashDenominationCounts.isEmpty) {
+      return;
+    }
+    _cashTenderedDraft = normalized;
+    _cashDenominationCounts.clear();
+    notifyListeners();
+  }
+
+  void addCashDenominationDraft(double denomination) {
+    if (denomination <= 0) return;
+    _cashDenominationCounts.update(
+      denomination,
+      (count) => count + 1,
+      ifAbsent: () => 1,
+    );
+    _cashTenderedDraft = _asMoney(_cashTenderedDraft + denomination);
+    notifyListeners();
+  }
+
+  void removeCashDenominationDraft(double denomination) {
+    final currentCount = _cashDenominationCounts[denomination] ?? 0;
+    if (currentCount <= 0) return;
+    if (currentCount == 1) {
+      _cashDenominationCounts.remove(denomination);
+    } else {
+      _cashDenominationCounts[denomination] = currentCount - 1;
+    }
+    _cashTenderedDraft = _asMoney((_cashTenderedDraft - denomination).clamp(0.0, double.infinity));
     notifyListeners();
   }
 
@@ -282,6 +372,7 @@ class PosProvider extends ChangeNotifier {
     _cashTenderedDraft = 0.0;
     _cardTenderedDraft = 0.0;
     _voucherCodeDraft = '';
+    _cashDenominationCounts.clear();
     notifyListeners();
   }
 
@@ -313,6 +404,7 @@ class PosProvider extends ChangeNotifier {
     _cashTenderedDraft = 0.0;
     _cardTenderedDraft = 0.0;
     _voucherCodeDraft = '';
+    _cashDenominationCounts.clear();
     notifyListeners();
   }
 
@@ -570,4 +662,7 @@ class PosProvider extends ChangeNotifier {
       emoji: '🧁',
     ),
   ];
+
+  static double _asMoney(double value) =>
+      (value * 100).roundToDouble() / 100.0;
 }

@@ -10,82 +10,22 @@ class PaymentPanel extends StatefulWidget {
   State<PaymentPanel> createState() => _PaymentPanelState();
 }
 
-class _PaymentPanelState extends State<PaymentPanel>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-  String _cashInput = '';
-  String _cardInput = '';
+class _PaymentPanelState extends State<PaymentPanel> {
   String _voucherCode = '';
   bool _isProcessing = false;
-  int _quickAmountPage = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  double get _cashAmount => double.tryParse(_cashInput) ?? 0.0;
-  double get _cardAmount => double.tryParse(_cardInput) ?? 0.0;
 
   void _syncDrafts(PosProvider provider) {
-    provider.setCashTenderedDraft(_cashAmount);
-    provider.setCardTenderedDraft(_cardAmount);
     provider.setVoucherCodeDraft(_voucherCode.trim());
   }
 
-  void _onNumpadKey(String key, {bool isSplit = false}) {
-    final provider = context.read<PosProvider>();
-    if (provider.cartIsEmpty) return;
-
-    setState(() {
-      final current = isSplit ? _cardInput : _cashInput;
-      String updated;
-
-      if (key == '⌫') {
-        updated = current.isEmpty
-            ? ''
-            : current.substring(0, current.length - 1);
-      } else if (key == '.') {
-        if (current.contains('.')) return;
-        updated = current.isEmpty ? '0.' : '$current.';
-      } else {
-        final dotIdx = current.indexOf('.');
-        if (dotIdx >= 0 && current.length - dotIdx > 2) return;
-        if (current.length >= 7) return;
-        updated = (current == '0') ? key : '$current$key';
-      }
-
-      if (isSplit) {
-        _cardInput = updated;
-      } else {
-        _cashInput = updated;
-      }
-    });
-    _syncDrafts(provider);
-  }
-
-  Future<void> _setQuickAmount(PosProvider provider, double amount) async {
-    if (provider.cartIsEmpty) return;
-
-    setState(() {
-      _cashInput = amount == amount.truncateToDouble()
-          ? amount.toInt().toString()
-          : amount.toStringAsFixed(2);
-    });
-    _syncDrafts(provider);
-    if (!provider.oneTapPaymentEnabled) return;
-    if (amount < provider.total) return;
+  Future<void> _onCashDenominationTap(PosProvider provider, double amount) async {
+    if (_isProcessing || provider.cartIsEmpty || !provider.hasActiveShift) return;
+    provider.addCashDenominationDraft(amount);
+    if (provider.amountDueDraft > 0) return;
     await _processPayment(
       provider,
       tenderType: TenderType.cash,
-      cashAmountOverride: amount,
+      cashAmountOverride: provider.cashTenderedDraft,
     );
   }
 
@@ -103,7 +43,7 @@ class _PaymentPanelState extends State<PaymentPanel>
 
     switch (activeTenderType) {
       case TenderType.cash:
-        cashAmount = cashAmountOverride ?? _cashAmount;
+        cashAmount = cashAmountOverride ?? provider.cashTenderedDraft;
         cardAmount = 0.0;
         break;
       case TenderType.card:
@@ -111,8 +51,8 @@ class _PaymentPanelState extends State<PaymentPanel>
         cardAmount = cardAmountOverride ?? provider.total;
         break;
       case TenderType.split:
-        cardAmount = cardAmountOverride ?? _cardAmount;
-        cashAmount = cashAmountOverride ?? (provider.total - cardAmount);
+        cashAmount = 0.0;
+        cardAmount = cardAmountOverride ?? provider.total;
         break;
       case TenderType.voucher:
         cashAmount = 0.0;
@@ -130,8 +70,6 @@ class _PaymentPanelState extends State<PaymentPanel>
 
       if (!mounted) return;
       setState(() {
-        _cashInput = '';
-        _cardInput = '';
         _voucherCode = '';
       });
       provider.clearPaymentDrafts();
@@ -177,77 +115,35 @@ class _PaymentPanelState extends State<PaymentPanel>
       );
   }
 
-  List<double> _quickAmounts(double total) {
-    final amounts = <double>[total];
-    for (final bill in [10.0, 20.0, 50.0, 100.0]) {
-      if (bill >= total && !amounts.contains(bill)) amounts.add(bill);
+  String _cashDenominationLabel(double amount) {
+    if (amount < 1) {
+      return '${(amount * 100).round()}¢';
     }
-    return amounts.take(4).toList();
+    if (amount == amount.truncateToDouble()) {
+      return '\$${amount.toInt()}';
+    }
+    return '\$${amount.toStringAsFixed(2)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildTabBar(),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [_buildPayTab(), _buildHistoryTab()],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      height: 46,
-      color: const Color(0xFF1E293B),
-      child: TabBar(
-        controller: _tabController,
-        indicatorColor: const Color(0xFF14B8A6),
-        indicatorWeight: 2,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-        labelColor: const Color(0xFF14B8A6),
-        unselectedLabelColor: const Color(0xFF94A3B8),
-        tabs: const [
-          Tab(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.payment, size: 16),
-                SizedBox(width: 4),
-                Text('Payment', style: TextStyle(fontSize: 12)),
-              ],
-            ),
-          ),
-          Tab(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.history, size: 16),
-                SizedBox(width: 4),
-                Text('History', style: TextStyle(fontSize: 12)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPayTab() {
     return Consumer<PosProvider>(
       builder: (context, provider, _) {
-        final mode = provider.selectedPaymentMode;
-        return Column(
-          children: [
-            _buildShortcutActions(provider, mode),
-            Expanded(child: _buildModeContent(provider, mode)),
-          ],
-        );
+        if (provider.showPaymentHistory) {
+          return _buildHistoryTab();
+        }
+        return _buildPayTab(provider);
       },
+    );
+  }
+
+  Widget _buildPayTab(PosProvider provider) {
+    final mode = provider.selectedPaymentMode;
+    return Column(
+      children: [
+        _buildShortcutActions(provider, mode),
+        Expanded(child: _buildModeContent(provider, mode)),
+      ],
     );
   }
 
@@ -258,7 +154,7 @@ class _PaymentPanelState extends State<PaymentPanel>
       case TenderType.card:
         return _buildCardContent(provider);
       case TenderType.split:
-        return _buildSplitContent(provider);
+        return _buildCardContent(provider);
       case TenderType.voucher:
         return _buildVoucherContent(provider);
     }
@@ -271,33 +167,7 @@ class _PaymentPanelState extends State<PaymentPanel>
     }
 
     return switch (mode) {
-      TenderType.cash => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-        child: SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isProcessing
-                ? null
-                : () => _processPayment(
-                    provider,
-                    tenderType: TenderType.cash,
-                    cashAmountOverride: provider.total,
-                  ),
-            icon: const Icon(Icons.flash_on, size: 14),
-            label: Text('Exact Cash • \$${provider.total.toStringAsFixed(2)}'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF14B8A6),
-              side: const BorderSide(color: Color(0xFF14B8A6)),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              textStyle: const TextStyle(fontSize: 11),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-        ),
-      ),
+      TenderType.cash => const SizedBox.shrink(),
       TenderType.card => Padding(
         padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
         child: SizedBox(
@@ -331,11 +201,9 @@ class _PaymentPanelState extends State<PaymentPanel>
   }
 
   Widget _buildCashContent(PosProvider provider) {
-    return Column(
-      children: [
-        _buildQuickAmounts(provider, provider.total),
-        Expanded(child: _buildNumpad()),
-      ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: _buildCashDenominationGrid(provider),
     );
   }
 
@@ -398,82 +266,6 @@ class _PaymentPanelState extends State<PaymentPanel>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSplitContent(PosProvider provider) {
-    final cardAmount = _cardAmount;
-    final cashNeeded = cardAmount > 0 ? provider.total - cardAmount : 0.0;
-    final validSplit = cardAmount > 0 && cardAmount < provider.total;
-
-    return Column(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Card Amount',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF334155)),
-                  ),
-                  child: Text(
-                    _cardInput.isEmpty ? '0.00' : _cardInput,
-                    style: TextStyle(
-                      color: _cardInput.isEmpty
-                          ? const Color(0xFF475569)
-                          : Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (_cardInput.isNotEmpty)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Cash Required',
-                        style: TextStyle(
-                          color: Color(0xFF94A3B8),
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        validSplit
-                            ? '\$${cashNeeded.toStringAsFixed(2)}'
-                            : 'Invalid amount',
-                        style: TextStyle(
-                          color: validSplit
-                              ? const Color(0xFF22C55E)
-                              : const Color(0xFFEF4444),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ),
-        Flexible(flex: 1, child: _buildNumpad(isSplit: true)),
-      ],
     );
   }
 
@@ -581,164 +373,97 @@ class _PaymentPanelState extends State<PaymentPanel>
     );
   }
 
-  Widget _buildQuickAmounts(PosProvider provider, double total) {
-    final suggestions = _quickAmounts(total);
-    return SizedBox(
-      height: 72,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final perPage = constraints.maxWidth < 420 ? 3 : 4;
-          final pages = <List<double>>[];
-          for (var i = 0; i < suggestions.length; i += perPage) {
-            pages.add(
-              suggestions.sublist(
-                i,
-                (i + perPage) > suggestions.length
-                    ? suggestions.length
-                    : i + perPage,
-              ),
-            );
-          }
+  Widget _buildCashDenominationGrid(PosProvider provider) {
+    final visible = provider.visibleCashDenominations;
+    final rows = <List<double>>[];
+    for (var i = 0; i < visible.length; i += 3) {
+      rows.add(
+        visible.sublist(
+          i,
+          (i + 3) > visible.length ? visible.length : i + 3,
+        ),
+      );
+    }
 
-          return Column(
-            children: [
-              Expanded(
-                child: PageView.builder(
-                  onPageChanged: (index) =>
-                      setState(() => _quickAmountPage = index),
-                  itemCount: pages.length,
-                  itemBuilder: (_, pageIndex) {
-                    final amounts = pages[pageIndex];
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
-                      child: Row(
-                        children: amounts.map((amount) {
-                          final isExact = amount == total;
-                          final label = isExact
-                              ? 'Exact'
-                              : '\$${amount.toInt()}';
-                          return Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 3,
-                              ),
-                              child: GestureDetector(
-                                onTap: () => _setQuickAmount(provider, amount),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: isExact
-                                        ? const Color(
-                                            0xFF14B8A6,
-                                          ).withValues(alpha: 0.2)
-                                        : const Color(0xFF334155),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: isExact
-                                          ? const Color(0xFF14B8A6)
-                                          : Colors.transparent,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Text(
+    if (rows.isEmpty) {
+      return const Center(
+        child: Text(
+          'No cash denominations configured',
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: Column(
+            children: rows.map((row) {
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: row.map((amount) {
+                      final count = provider.cashTenderCountFor(amount);
+                      final label = _cashDenominationLabel(amount);
+                      final isEnabled =
+                          provider.isCashDenominationEnabled(amount) &&
+                          !provider.cartIsEmpty &&
+                          provider.hasActiveShift &&
+                          !_isProcessing;
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: Material(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              key: Key('cash-denomination-$label'),
+                              onTap: isEnabled
+                                  ? () => _onCashDenominationTap(provider, amount)
+                                  : null,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
                                       label,
                                       style: TextStyle(
-                                        color: isExact
+                                        color: isEnabled
+                                            ? Colors.white
+                                            : const Color(0xFF64748B),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      count > 0 ? 'x$count' : ' ',
+                                      style: TextStyle(
+                                        color: isEnabled
                                             ? const Color(0xFF14B8A6)
-                                            : Colors.white,
-                                        fontSize: 12,
+                                            : const Color(0xFF475569),
+                                        fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (pages.length > 1)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(pages.length, (i) {
-                      final active = i == _quickAmountPage;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: active ? 14 : 6,
-                        height: 6,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: active
-                              ? const Color(0xFF14B8A6)
-                              : const Color(0xFF334155),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildNumpad({bool isSplit = false}) {
-    const rows = [
-      ['7', '8', '9'],
-      ['4', '5', '6'],
-      ['1', '2', '3'],
-      ['.', '0', '⌫'],
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: Column(
-        children: rows.map((row) {
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 5),
-              child: Row(
-                children: row.map((key) {
-                  final isBackspace = key == '⌫';
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      child: Material(
-                        color: isBackspace
-                            ? const Color(0xFF334155)
-                            : const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(10),
-                        child: InkWell(
-                          onTap: () => _onNumpadKey(key, isSplit: isSplit),
-                          borderRadius: BorderRadius.circular(10),
-                          child: Center(
-                            child: Text(
-                              key,
-                              style: TextStyle(
-                                color: isBackspace
-                                    ? const Color(0xFF94A3B8)
-                                    : Colors.white,
-                                fontSize: isBackspace ? 20 : 22,
-                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 

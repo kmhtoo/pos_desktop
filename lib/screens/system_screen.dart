@@ -536,6 +536,12 @@ class _AppSettingsCard extends StatelessWidget {
 
   final PosProvider provider;
 
+  String _cashDenominationLabel(double amount) {
+    if (amount < 1) return '${(amount * 100).round()}¢';
+    if (amount == amount.truncateToDouble()) return '\$${amount.toInt()}';
+    return '\$${amount.toStringAsFixed(2)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -555,12 +561,109 @@ class _AppSettingsCard extends StatelessWidget {
             onChanged: provider.setUseAnimatedPageTransitions,
           ),
           const Divider(color: Color(0xFF334155), height: 20),
-          _SettingToggleTile(
-            icon: Icons.flash_on_outlined,
-            label: 'One-tap Payment Shortcuts',
-            description: 'Allow one tap payment for exact cash and card.',
-            value: provider.oneTapPaymentEnabled,
-            onChanged: provider.setOneTapPaymentEnabled,
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Cash Denomination Settings',
+              style: TextStyle(
+                color: Color(0xFFCBD5E1),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...PosProvider.supportedCashDenominations.asMap().entries.map((entry) {
+            final denomination = entry.value;
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: entry.key ==
+                        PosProvider.supportedCashDenominations.length - 1
+                    ? 0
+                    : 8,
+              ),
+              child: _CashDenominationSettingTile(
+                label: _cashDenominationLabel(denomination),
+                isVisible: provider.isCashDenominationVisible(denomination),
+                isEnabled: provider.isCashDenominationEnabled(denomination),
+                onVisibleChanged: (value) =>
+                    provider.setCashDenominationVisibility(denomination, value),
+                onEnabledChanged: (value) =>
+                    provider.setCashDenominationEnabled(denomination, value),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _CashDenominationSettingTile extends StatelessWidget {
+  const _CashDenominationSettingTile({
+    required this.label,
+    required this.isVisible,
+    required this.isEnabled,
+    required this.onVisibleChanged,
+    required this.onEnabledChanged,
+  });
+
+  final String label;
+  final bool isVisible;
+  final bool isEnabled;
+  final ValueChanged<bool> onVisibleChanged;
+  final ValueChanged<bool> onEnabledChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Text(
+                'Show',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+              ),
+              const SizedBox(width: 6),
+              Switch(
+                value: isVisible,
+                activeThumbColor: const Color(0xFF14B8A6),
+                activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                onChanged: onVisibleChanged,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Enable',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+              ),
+              const SizedBox(width: 6),
+              Switch(
+                value: isEnabled,
+                activeThumbColor: const Color(0xFF14B8A6),
+                activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                onChanged: onEnabledChanged,
+              ),
+            ],
           ),
         ],
       ),
