@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/pos_provider.dart';
 import '../models/shift.dart';
+import '../services/receipt_printer.dart';
 
 class SystemScreen extends StatelessWidget {
   const SystemScreen({super.key});
@@ -46,6 +47,10 @@ class SystemScreen extends StatelessWidget {
               _SectionLabel(label: 'APP SETTINGS'),
               const SizedBox(height: 8),
               _AppSettingsCard(provider: provider),
+              const SizedBox(height: 20),
+              _SectionLabel(label: 'PRINTERS'),
+              const SizedBox(height: 8),
+              _PrinterSettingsCard(provider: provider),
               if (provider.todayShifts.any((s) => !s.isOpen)) ...[
                 const SizedBox(height: 20),
                 _SectionLabel(label: "TODAY'S SHIFTS"),
@@ -665,6 +670,309 @@ class _CashDenominationSettingTile extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrinterSettingsCard extends StatelessWidget {
+  const _PrinterSettingsCard({required this.provider});
+
+  final PosProvider provider;
+
+  String _roleLabel(PrinterRole role) {
+    return switch (role) {
+      PrinterRole.receipt => 'Receipt',
+      PrinterRole.kitchen => 'Kitchen',
+      PrinterRole.barcode => 'Barcode',
+      PrinterRole.label => 'Label',
+    };
+  }
+
+  String _typeLabel(PrinterConnectionType type) {
+    return switch (type) {
+      PrinterConnectionType.bluetooth => 'Bluetooth',
+      PrinterConnectionType.tcpIp => 'TCP/IP',
+      PrinterConnectionType.usb => 'USB',
+    };
+  }
+
+  String _deviceLabel(PrinterDevice device) {
+    if (device.connectionType == PrinterConnectionType.tcpIp &&
+        device.port != null) {
+      return '${device.name} • ${device.address}:${device.port}';
+    }
+    return '${device.name} • ${device.address}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messenger = ScaffoldMessenger.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Printer Discovery & Assignment',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: provider.isDiscoveringPrinters
+                    ? null
+                    : () => provider.discoverPrinters(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0EA5E9),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  textStyle: const TextStyle(fontSize: 11),
+                ),
+                icon: provider.isDiscoveringPrinters
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.wifi_find, size: 14),
+                label: const Text('Discover'),
+              ),
+            ],
+          ),
+          if (!provider.hasPrinterManager) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Printer manager is not configured for this environment.',
+              style: TextStyle(color: Color(0xFFEF4444), fontSize: 11),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            provider.discoveredPrinters.isEmpty
+                ? 'No printers discovered yet.'
+                : '${provider.discoveredPrinters.length} printer(s) discovered',
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Tap Test Connection to allow local network access for printer setup.',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 10),
+          ),
+          const SizedBox(height: 10),
+          ...provider.printerRoles.map((role) {
+            final assigned = provider.assignedPrinterForRole(role);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          _roleLabel(role),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (assigned != null)
+                          Text(
+                            _typeLabel(assigned.connectionType),
+                            style: const TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 10,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String?>(
+                      initialValue: assigned != null && provider.discoveredPrinters.any((p) => p.id == assigned.id)
+                          ? assigned.id
+                          : null,
+                      dropdownColor: const Color(0xFF1E293B),
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Unassigned'),
+                        ),
+                        ...provider.discoveredPrinters.map(
+                          (device) => DropdownMenuItem<String?>(
+                            value: device.id,
+                            child: Text(
+                              _deviceLabel(device),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        if (assigned != null && !provider.discoveredPrinters.any((p) => p.id == assigned.id))
+                          DropdownMenuItem<String?>(
+                            value: assigned.id,
+                            child: Text(
+                              '${_deviceLabel(assigned)} (auto-assigned)',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: provider.hasPrinterManager
+                          ? (value) {
+                              if (value == null) {
+                                provider.unassignPrinterRole(role);
+                                return;
+                              }
+                              PrinterDevice? device;
+                              for (final printer in provider.discoveredPrinters) {
+                                if (printer.id == value) {
+                                  device = printer;
+                                  break;
+                                }
+                              }
+                              if (device == null) return;
+                              provider.assignPrinterRole(role, device);
+                            }
+                          : null,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            assigned == null
+                                ? 'No printer assigned'
+                                : _deviceLabel(assigned),
+                            style: const TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 11,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: assigned == null || !provider.hasPrinterManager
+                              ? null
+                              : () {
+                                  provider.testPrinter(role).then((_) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '${_roleLabel(role)} printer test sent',
+                                        ),
+                                      ),
+                                    );
+                                  }).catchError((error) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFFB91C1C),
+                                        content: Text(
+                                          'Printer test failed: $error',
+                                        ),
+                                      ),
+                                    );
+                                  });
+                                },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF14B8A6),
+                            side: const BorderSide(color: Color(0xFF14B8A6)),
+                            textStyle: const TextStyle(fontSize: 11),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                          child: const Text('Test Epson Print'),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: assigned == null || !provider.hasPrinterManager
+                              ? null
+                              : () {
+                                  provider.testPrinterConnection(role).then((_) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFF065F46),
+                                        content: Text(
+                                          '${_roleLabel(role)} printer connection OK',
+                                        ),
+                                      ),
+                                    );
+                                  }).catchError((error) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFFB91C1C),
+                                        content: Text(
+                                          'Connection failed: $error',
+                                        ),
+                                      ),
+                                    );
+                                  });
+                                },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF38BDF8),
+                            side: const BorderSide(color: Color(0xFF38BDF8)),
+                            textStyle: const TextStyle(fontSize: 11),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                          child: const Text('Test Connection'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );

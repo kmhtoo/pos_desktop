@@ -6,6 +6,7 @@ import '../models/user.dart';
 import '../models/business_day.dart';
 import '../models/shift.dart';
 import '../data/pos_repository.dart';
+import '../services/receipt_printer.dart';
 
 class PosProvider extends ChangeNotifier {
   static const double taxRate = 0.10;
@@ -24,9 +25,17 @@ class PosProvider extends ChangeNotifier {
     0.05,
   ];
 
-  final PosRepository _repository;
+  final PosRepository repository;
+  final ReceiptPrinter _receiptPrinter;
+  final PrinterManager? _printerManager;
 
-  PosProvider({required this._repository});
+  PosProvider({
+    required this.repository,
+    ReceiptPrinter? receiptPrinter,
+    PrinterManager? printerManager,
+  }) : _printerManager = printerManager,
+       _receiptPrinter =
+           receiptPrinter ?? printerManager ?? const NoOpReceiptPrinter();
 
   final List<Product> products = _buildProducts();
   final List<CartItem> _cart = [];
@@ -47,6 +56,8 @@ class PosProvider extends ChangeNotifier {
   final Map<double, bool> _cashDenominationEnabled = {
     for (final d in supportedCashDenominations) d: true,
   };
+  List<PrinterDevice> _discoveredPrinters = [];
+  bool _isDiscoveringPrinters = false;
 
   BusinessDay? _currentBusinessDay;
   Shift? _currentShift;
@@ -55,10 +66,10 @@ class PosProvider extends ChangeNotifier {
   // ── Init (loads persisted state on startup) ───────────────────────────────────
 
   Future<void> init() async {
-    _currentBusinessDay = await _repository.loadActiveBusinessDay();
+    _currentBusinessDay = await repository.loadActiveBusinessDay();
 
     if (_currentBusinessDay != null) {
-      final shifts = await _repository.loadShiftsForDay(
+      final shifts = await repository.loadShiftsForDay(
         _currentBusinessDay!.id,
       );
       _shifts
@@ -67,7 +78,7 @@ class PosProvider extends ChangeNotifier {
       _currentShift = _shifts.where((s) => s.isOpen).firstOrNull;
 
       for (final shift in _shifts) {
-        final txns = await _repository.loadTransactionsForShift(shift.id);
+        final txns = await repository.loadTransactionsForShift(shift.id);
         _transactions.addAll(txns);
       }
       _transactions.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -110,6 +121,13 @@ class PosProvider extends ChangeNotifier {
   AppUser? get currentUser => _currentUser;
   bool get useAnimatedPageTransitions => _useAnimatedPageTransitions;
   bool get oneTapPaymentEnabled => _oneTapPaymentEnabled;
+  bool get hasPrinterManager => _printerManager != null;
+  bool get isDiscoveringPrinters => _isDiscoveringPrinters;
+  List<PrinterDevice> get discoveredPrinters =>
+      List.unmodifiable(_discoveredPrinters);
+  List<PrinterRole> get printerRoles => PrinterRole.values;
+  PrinterDevice? assignedPrinterForRole(PrinterRole role) =>
+      _printerManager?.assignedPrinterFor(role);
   bool isCashDenominationVisible(double denomination) =>
       _cashDenominationVisible[denomination] ?? true;
   bool isCashDenominationEnabled(double denomination) =>
@@ -147,6 +165,52 @@ class PosProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> discoverPrinters() async {
+    if (_printerManager == null) {
+      _discoveredPrinters = [];
+      notifyListeners();
+      return;
+    }
+    _isDiscoveringPrinters = true;
+    notifyListeners();
+    try {
+      _discoveredPrinters = await _printerManager.discoverAvailablePrinters();
+    } finally {
+      _isDiscoveringPrinters = false;
+      notifyListeners();
+    }
+  }
+
+  void assignPrinterRole(PrinterRole role, PrinterDevice device) {
+    if (_printerManager == null) return;
+    _printerManager.assignPrinter(role, device);
+    notifyListeners();
+  }
+
+  void unassignPrinterRole(PrinterRole role) {
+    if (_printerManager == null) return;
+    _printerManager.unassignPrinter(role);
+    notifyListeners();
+  }
+
+  Future<void> testPrinter(PrinterRole role) async {
+    if (_printerManager == null) {
+      throw StateError('Printer manager is not configured.');
+    }
+    await _printerManager.printTestPage(
+      role: role,
+      title: 'EPSON PRINTER TEST',
+      message: '${role.name.toUpperCase()} ROLE READY',
+    );
+  }
+
+  Future<void> testPrinterConnection(PrinterRole role) async {
+    if (_printerManager == null) {
+      throw StateError('Printer manager is not configured.');
+    }
+    await _printerManager.testConnection(role: role);
+  }
+
   void setCashDenominationVisibility(double denomination, bool visible) {
     if (!_cashDenominationVisible.containsKey(denomination)) return;
     if (_cashDenominationVisible[denomination] == visible) return;
@@ -181,7 +245,7 @@ class PosProvider extends ChangeNotifier {
     _shifts.clear();
     _transactions.clear();
     _currentShift = null;
-    await _repository.saveBusinessDay(bd);
+    await repository.saveBusinessDay(bd);
     notifyListeners();
   }
 
@@ -193,7 +257,7 @@ class PosProvider extends ChangeNotifier {
       closedById: by.id,
     );
     _currentBusinessDay = closed;
-    await _repository.saveBusinessDay(closed);
+    await repository.saveBusinessDay(closed);
     notifyListeners();
   }
 
@@ -225,7 +289,7 @@ class PosProvider extends ChangeNotifier {
     );
     _shifts.add(shift);
     _currentShift = shift;
-    await _repository.saveShift(shift);
+    await repository.saveShift(shift);
     notifyListeners();
   }
 
@@ -238,7 +302,7 @@ class PosProvider extends ChangeNotifier {
     final idx = _shifts.indexWhere((s) => s.id == closed.id);
     if (idx >= 0) _shifts[idx] = closed;
     _currentShift = closed;
-    await _repository.saveShift(closed);
+    await repository.saveShift(closed);
     notifyListeners();
   }
 
@@ -420,7 +484,7 @@ class PosProvider extends ChangeNotifier {
       voidedById: user.id,
     );
     _transactions[idx] = voided;
-    await _repository.updateTransactionVoid(voided);
+    await repository.updateTransactionVoid(voided);
     notifyListeners();
   }
 
@@ -453,8 +517,9 @@ class PosProvider extends ChangeNotifier {
     );
 
     _transactions.insert(0, txn);
-    await _repository.insertTransaction(txn);
+    await repository.insertTransaction(txn);
     clearCart();
+    await _receiptPrinter.printReceipt(txn);
     return txn;
   }
 

@@ -2,8 +2,39 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_pos_desktop/data/app_database.dart';
 import 'package:flutter_pos_desktop/data/pos_repository.dart';
+import 'package:flutter_pos_desktop/models/shift.dart';
 import 'package:flutter_pos_desktop/models/transaction.dart';
+import 'package:flutter_pos_desktop/models/user.dart';
 import 'package:flutter_pos_desktop/providers/pos_provider.dart';
+import 'package:flutter_pos_desktop/services/receipt_printer.dart';
+
+class _FakeReceiptPrinter implements ReceiptPrinter {
+  final List<Transaction> printedTransactions = [];
+
+  @override
+  Future<void> printReceipt(Transaction transaction) async {
+    printedTransactions.add(transaction);
+  }
+}
+
+class _FakePrinterDriver implements PrinterDriver {
+  final List<PrinterDevice> sentDevices = [];
+  final List<List<int>> sentBytes = [];
+
+  @override
+  bool canHandle(PrinterDevice device) => true;
+
+  @override
+  Future<void> sendBytes(PrinterDevice device, List<int> bytes) async {
+    sentDevices.add(device);
+    sentBytes.add(bytes);
+  }
+
+  @override
+  Future<void> testConnection(PrinterDevice device) async {
+    sentDevices.add(device);
+  }
+}
 
 void main() {
   group('Payment mode provider state', () {
@@ -78,6 +109,82 @@ void main() {
       expect(provider.isCashDenominationVisible(10000.0), isFalse);
       expect(provider.isCashDenominationEnabled(10000.0), isFalse);
       expect(provider.visibleCashDenominations, isNot(contains(10000.0)));
+    });
+
+    test('processPayment sends transaction to receipt printer', () async {
+      final printer = _FakeReceiptPrinter();
+      final providerWithPrinter = PosProvider(
+        repository: PosRepository(database),
+        receiptPrinter: printer,
+      );
+      final user = AppUser(
+        id: '1001',
+        name: 'Alex Chen',
+        role: 'Cashier',
+        loginTime: DateTime.now(),
+      );
+      providerWithPrinter.setUser(user);
+      await providerWithPrinter.openBusinessDay(user);
+      await providerWithPrinter.openShift(ShiftType.breakfast, user);
+      providerWithPrinter.addToCart(providerWithPrinter.products.first);
+
+      final txn = await providerWithPrinter.processPayment(
+        tenderType: TenderType.cash,
+        cashAmount: providerWithPrinter.total,
+        cardAmount: 0.0,
+      );
+
+      expect(printer.printedTransactions.length, 1);
+      expect(printer.printedTransactions.first.id, txn.id);
+    });
+
+    test('provider discovers assigns and test prints by role', () async {
+      final driver = _FakePrinterDriver();
+      const device = PrinterDevice(
+        id: 'tcp-1',
+        name: 'Receipt TCP',
+        connectionType: PrinterConnectionType.tcpIp,
+        address: '192.168.1.50',
+        port: 9100,
+      );
+      final providerWithManager = PosProvider(
+        repository: PosRepository(database),
+        printerManager: PrinterManager(
+          discovery: const StaticPrinterDiscovery([device]),
+          drivers: [driver],
+        ),
+      );
+
+      await providerWithManager.discoverPrinters();
+      expect(providerWithManager.discoveredPrinters.length, 1);
+      expect(providerWithManager.discoveredPrinters.first.id, device.id);
+
+      providerWithManager.assignPrinterRole(PrinterRole.receipt, device);
+      expect(
+        providerWithManager.assignedPrinterForRole(PrinterRole.receipt)?.id,
+        device.id,
+      );
+
+      await providerWithManager.testPrinter(PrinterRole.receipt);
+      expect(driver.sentDevices.single.id, device.id);
+      expect(driver.sentBytes.single, isNotEmpty);
+      expect(
+        String.fromCharCodes(driver.sentBytes.single),
+        contains('EPSON PRINTER TEST'),
+      );
+
+      driver.sentDevices.clear();
+      driver.sentBytes.clear();
+
+      await providerWithManager.testPrinterConnection(PrinterRole.receipt);
+      expect(driver.sentDevices.single.id, device.id);
+      expect(driver.sentBytes, isEmpty);
+
+      providerWithManager.unassignPrinterRole(PrinterRole.receipt);
+      expect(
+        providerWithManager.assignedPrinterForRole(PrinterRole.receipt),
+        isNull,
+      );
     });
   });
 }
