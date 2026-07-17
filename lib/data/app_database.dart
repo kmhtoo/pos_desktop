@@ -87,16 +87,105 @@ class CartItems extends Table {
   IntColumn get quantity => integer()();
 }
 
+@DataClassName('SuspendedOrderRow')
+class SuspendedOrders extends Table {
+  @override
+  String get tableName => 'suspended_orders';
+
+  TextColumn get id => text()();
+  TextColumn get shiftId => text()();
+  TextColumn get orderLabel => text()();
+  TextColumn get cashierId => text().nullable()();
+  TextColumn get cashierName => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DataClassName('SuspendedOrderItemRow')
+class SuspendedOrderItems extends Table {
+  @override
+  String get tableName => 'suspended_order_items';
+
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get suspendedOrderId => text()();
+  TextColumn get productId => text()();
+  TextColumn get productName => text()();
+  RealColumn get productPrice => real()();
+  TextColumn get productCategory => text()();
+  TextColumn get productEmoji => text()();
+  IntColumn get productColor => integer()();
+  IntColumn get quantity => integer()();
+}
+
 // ── Database class ────────────────────────────────────────────────────────────
 
-@DriftDatabase(tables: [BusinessDays, Shifts, Transactions, CartItems])
+@DriftDatabase(
+  tables: [
+    BusinessDays,
+    Shifts,
+    Transactions,
+    CartItems,
+    SuspendedOrders,
+    SuspendedOrderItems,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (migrator) async {
+          await migrator.createAll();
+        },
+        onUpgrade: (migrator, from, to) async {
+          if (from < 2) {
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS suspended_orders ('
+              'id TEXT NOT NULL PRIMARY KEY, '
+              'shift_id TEXT NOT NULL, '
+              'cashier_id TEXT NULL, '
+              'cashier_name TEXT NULL, '
+              'created_at INTEGER NOT NULL, '
+              'updated_at INTEGER NOT NULL'
+              ')',
+            );
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS suspended_order_items ('
+              'id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
+              'suspended_order_id TEXT NOT NULL, '
+              'product_id TEXT NOT NULL, '
+              'product_name TEXT NOT NULL, '
+              'product_price REAL NOT NULL, '
+              'product_category TEXT NOT NULL, '
+              'product_emoji TEXT NOT NULL, '
+              'product_color INTEGER NOT NULL, '
+              'quantity INTEGER NOT NULL'
+              ')',
+            );
+          }
+          if (from < 3) {
+            final tableInfo = await customSelect(
+              'PRAGMA table_info(suspended_orders)',
+            ).get();
+            final hasOrderLabel = tableInfo.any(
+              (row) => row.data['name'] == 'order_label',
+            );
+            if (!hasOrderLabel) {
+              await customStatement(
+                "ALTER TABLE suspended_orders ADD COLUMN order_label TEXT NOT NULL DEFAULT ''",
+              );
+            }
+          }
+        },
+      );
 }
 
 LazyDatabase _openConnection() {

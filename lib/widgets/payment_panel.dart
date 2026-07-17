@@ -10,602 +10,531 @@ class PaymentPanel extends StatefulWidget {
   State<PaymentPanel> createState() => _PaymentPanelState();
 }
 
-class _PaymentPanelState extends State<PaymentPanel>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-  TenderType _tenderType = TenderType.cash;
-  String _cashInput = '';
-  String _cardInput = '';
+class _PaymentPanelState extends State<PaymentPanel> {
+  String _voucherCode = '';
+  bool _isProcessing = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+  void _syncDrafts(PosProvider provider) {
+    provider.setVoucherCodeDraft(_voucherCode.trim());
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  Future<void> _onCashDenominationTap(PosProvider provider, double amount) async {
+    if (_isProcessing || provider.cartIsEmpty || !provider.hasActiveShift) return;
+    provider.addCashDenominationDraft(amount);
+    if (provider.amountDueDraft > 0) return;
+    await _processPayment(
+      provider,
+      tenderType: TenderType.cash,
+      cashAmountOverride: provider.cashTenderedDraft,
+    );
   }
 
-  double get _cashAmount => double.tryParse(_cashInput) ?? 0.0;
-  double get _cardAmount => double.tryParse(_cardInput) ?? 0.0;
+  Future<void> _processPayment(
+    PosProvider provider, {
+    TenderType? tenderType,
+    double? cashAmountOverride,
+    double? cardAmountOverride,
+  }) async {
+    if (!provider.hasActiveShift || provider.cartIsEmpty) return;
 
-  void _onNumpadKey(String key, {bool isSplit = false}) {
-    setState(() {
-      final current = isSplit ? _cardInput : _cashInput;
-      String updated;
-
-      if (key == '⌫') {
-        updated = current.isEmpty ? '' : current.substring(0, current.length - 1);
-      } else if (key == '.') {
-        if (current.contains('.')) return;
-        updated = current.isEmpty ? '0.' : '$current.';
-      } else {
-        final dotIdx = current.indexOf('.');
-        if (dotIdx >= 0 && current.length - dotIdx > 2) return;
-        if (current.length >= 7) return;
-        updated = (current == '0') ? key : '$current$key';
-      }
-
-      if (isSplit) {
-        _cardInput = updated;
-      } else {
-        _cashInput = updated;
-      }
-    });
-  }
-
-  void _setQuickAmount(double amount) {
-    setState(() {
-      _cashInput = amount == amount.truncateToDouble()
-          ? amount.toInt().toString()
-          : amount.toStringAsFixed(2);
-    });
-  }
-
-  void _changeTender(TenderType type) {
-    setState(() {
-      _tenderType = type;
-      _cashInput = '';
-      _cardInput = '';
-    });
-  }
-
-  bool _canProcess(PosProvider provider) {
-    if (!provider.hasActiveShift) return false;
-    if (provider.cartIsEmpty) return false;
-    switch (_tenderType) {
-      case TenderType.cash:
-        return _cashAmount >= provider.total && _cashInput.isNotEmpty;
-      case TenderType.card:
-        return true;
-      case TenderType.split:
-        return _cardAmount > 0 &&
-            _cardAmount < provider.total &&
-            _cardInput.isNotEmpty;
-    }
-  }
-
-  Future<void> _processPayment(PosProvider provider) async {
+    final activeTenderType = tenderType ?? provider.selectedPaymentMode;
     double cashAmount;
     double cardAmount;
 
-    switch (_tenderType) {
+    switch (activeTenderType) {
       case TenderType.cash:
-        cashAmount = _cashAmount;
+        cashAmount = cashAmountOverride ?? provider.cashTenderedDraft;
         cardAmount = 0.0;
         break;
       case TenderType.card:
         cashAmount = 0.0;
-        cardAmount = provider.total;
+        cardAmount = cardAmountOverride ?? provider.total;
         break;
       case TenderType.split:
-        cardAmount = _cardAmount;
-        cashAmount = provider.total - cardAmount;
+        cashAmount = 0.0;
+        cardAmount = cardAmountOverride ?? provider.total;
+        break;
+      case TenderType.voucher:
+        cashAmount = 0.0;
+        cardAmount = provider.total;
         break;
     }
 
-    final txn = await provider.processPayment(
-      tenderType: _tenderType,
-      cashAmount: cashAmount,
-      cardAmount: cardAmount,
-    );
+    setState(() => _isProcessing = true);
+    try {
+      final txn = await provider.processPayment(
+        tenderType: activeTenderType,
+        cashAmount: cashAmount,
+        cardAmount: cardAmount,
+      );
 
-    setState(() {
-      _cashInput = '';
-      _cardInput = '';
-    });
+      if (!mounted) return;
+      setState(() {
+        _voucherCode = '';
+      });
+      provider.clearPaymentDrafts();
 
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _SuccessDialog(transaction: txn),
+      _showPaymentSuccessToast(txn);
+    } on PaymentCompletionException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _voucherCode = '';
+      });
+      provider.clearPaymentDrafts();
+      _showPaymentSuccessToast(error.transaction);
+      _showPrintWarningToast(error);
+    } catch (error) {
+      if (!mounted) return;
+      _showPaymentFailureToast(error);
+    } finally {
+      if (mounted && _isProcessing) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  void _showPaymentSuccessToast(Transaction txn) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(12),
+          backgroundColor: const Color(0xFF065F46),
+          duration: const Duration(seconds: 3),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Paid \$${txn.total.toStringAsFixed(2)} • ${txn.tenderType.label}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                txn.id,
+                style: const TextStyle(color: Color(0xFFA7F3D0), fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
+  }
+
+  void _showPrintWarningToast(PaymentCompletionException error) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(12),
+        backgroundColor: const Color(0xFFB45309),
+        duration: const Duration(seconds: 4),
+        content: Text(
+          _friendlyPrintWarning(error),
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 
-  List<double> _quickAmounts(double total) {
-    final amounts = <double>[total];
-    for (final bill in [10.0, 20.0, 50.0, 100.0]) {
-      if (bill >= total && !amounts.contains(bill)) amounts.add(bill);
+  void _showPaymentFailureToast(Object error) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(12),
+        backgroundColor: const Color(0xFFB91C1C),
+        duration: const Duration(seconds: 4),
+        content: Text(
+          _friendlyPaymentFailure(error),
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  String _friendlyPrintWarning(PaymentCompletionException error) {
+    final cause = error.cause.toString().toLowerCase();
+    if (cause.contains('printer') || cause.contains('network')) {
+      return 'Payment is completed.\n'
+          'Cause: the receipt printer is not ready.\n'
+          'Try: check printer power, paper, and Wi-Fi, then try printing again.\n'
+          'Tell technician: payment saved, receipt print failed.';
     }
-    return amounts.take(4).toList();
+    return 'Payment is completed.\n'
+        'Cause: the receipt could not be prepared right now.\n'
+        'Try: wait a moment and try printing again.\n'
+        'Tell technician: payment saved, receipt print failed.';
+  }
+
+  String _friendlyPaymentFailure(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('printer')) {
+      return 'Payment could not be completed.\n'
+          'Cause: the printer was not ready.\n'
+          'Try: check printer power and paper, then try again.\n'
+          'Tell technician: payment stopped because printer was not ready.';
+    }
+    return 'Payment could not be completed.\n'
+        'Cause: something went wrong while saving the order.\n'
+        'Try: check the order and try again.\n'
+        'Tell technician: payment step failed before completion.';
+  }
+
+  String _cashDenominationLabel(double amount) {
+    if (amount < 1) {
+      return '${(amount * 100).round()}¢';
+    }
+    if (amount == amount.truncateToDouble()) {
+      return '\$${amount.toInt()}';
+    }
+    return '\$${amount.toStringAsFixed(2)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildTabBar(),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildPayTab(),
-              _buildHistoryTab(),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      height: 60,
-      color: const Color(0xFF1E293B),
-      child: TabBar(
-        controller: _tabController,
-        indicatorColor: const Color(0xFF14B8A6),
-        labelColor: const Color(0xFF14B8A6),
-        unselectedLabelColor: const Color(0xFF94A3B8),
-        tabs: const [
-          Tab(icon: Icon(Icons.payment, size: 18), text: 'Payment'),
-          Tab(icon: Icon(Icons.history, size: 18), text: 'History'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPayTab() {
     return Consumer<PosProvider>(
       builder: (context, provider, _) {
-        return Column(
-          children: [
-            _buildTotalBanner(provider),
-            _buildTenderSelector(),
-            Expanded(child: _buildTenderContent(provider)),
-            _buildProcessButton(provider),
-          ],
-        );
+        if (provider.showPaymentHistory) {
+          return _buildHistoryTab();
+        }
+        return _buildPayTab(provider);
       },
     );
   }
 
-  Widget _buildTotalBanner(PosProvider provider) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      color: const Color(0xFF0F172A),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            'Amount Due',
-            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-          ),
-          Text(
-            '\$${provider.total.toStringAsFixed(2)}',
-            style: TextStyle(
-              color: provider.cartIsEmpty
-                  ? const Color(0xFF475569)
-                  : Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
+  Widget _buildPayTab(PosProvider provider) {
+    final mode = provider.selectedPaymentMode;
+    return Column(
+      children: [
+        _buildShortcutActions(provider, mode),
+        Expanded(child: _buildModeContent(provider, mode)),
+      ],
     );
   }
 
-  Widget _buildTenderSelector() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: Row(
-        children: TenderType.values.map((type) {
-          final selected = _tenderType == type;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: GestureDetector(
-                onTap: () => _changeTender(type),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? const Color(0xFF14B8A6)
-                        : const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: selected
-                          ? const Color(0xFF14B8A6)
-                          : const Color(0xFF334155),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(type.emoji, style: const TextStyle(fontSize: 16)),
-                      const SizedBox(height: 2),
-                      Text(
-                        type.label,
-                        style: TextStyle(
-                          color: selected
-                              ? Colors.white
-                              : const Color(0xFF94A3B8),
-                          fontSize: 11,
-                          fontWeight: selected
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildTenderContent(PosProvider provider) {
-    switch (_tenderType) {
+  Widget _buildModeContent(PosProvider provider, TenderType mode) {
+    switch (mode) {
       case TenderType.cash:
         return _buildCashContent(provider);
       case TenderType.card:
         return _buildCardContent(provider);
       case TenderType.split:
-        return _buildSplitContent(provider);
+        return _buildCardContent(provider);
+      case TenderType.voucher:
+        return _buildVoucherContent(provider);
     }
   }
 
+  Widget _buildShortcutActions(PosProvider provider, TenderType mode) {
+    if (!provider.oneTapPaymentEnabled) return const SizedBox.shrink();
+    if (!provider.hasActiveShift || provider.cartIsEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return switch (mode) {
+      TenderType.cash => const SizedBox.shrink(),
+      TenderType.card => Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isProcessing
+                ? null
+                : () => _processPayment(
+                    provider,
+                    tenderType: TenderType.card,
+                    cardAmountOverride: provider.total,
+                  ),
+            icon: const Icon(Icons.tap_and_play, size: 14),
+            label: Text('Tap to Pay • \$${provider.total.toStringAsFixed(2)}'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0EA5E9),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              textStyle: const TextStyle(fontSize: 11),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+      ),
+      TenderType.split => const SizedBox.shrink(),
+      TenderType.voucher => const SizedBox.shrink(),
+    };
+  }
+
   Widget _buildCashContent(PosProvider provider) {
-    final change = _cashAmount - provider.total;
-    final hasEnough = _cashInput.isNotEmpty && _cashAmount >= provider.total;
-    return Column(
-      children: [
-        _buildAmountDisplay('Cash Tendered', _cashInput),
-        Expanded(
-          flex: 2,
-          child: _buildQuickAmounts(provider.total),
-        ),
-        Flexible(
-          flex: 1,
-          child: _buildNumpad(),
-        ),
-        if (_cashInput.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: _buildCashDenominationGrid(provider),
+    );
+  }
+
+  Widget _buildCardContent(PosProvider provider) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: const Color(0xFF14B8A6).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.credit_card,
+              color: Color(0xFF14B8A6),
+              size: 26,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Charge to Card',
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '\$${provider.total.toStringAsFixed(2)}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'Change',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                ),
-                Text(
-                  hasEnough
-                      ? '\$${change.toStringAsFixed(2)}'
-                      : 'Insufficient',
-                  style: TextStyle(
-                    color: hasEnough
-                        ? const Color(0xFF22C55E)
-                        : const Color(0xFFEF4444),
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
+                Icon(Icons.tap_and_play, color: Color(0xFF14B8A6), size: 16),
+                SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Tap, insert, or swipe card',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                   ),
                 ),
               ],
             ),
           ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildCardContent(PosProvider provider) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: const Color(0xFF14B8A6).withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.credit_card,
-            color: Color(0xFF14B8A6),
-            size: 40,
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Charge to Card',
-          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '\$${provider.total.toStringAsFixed(2)}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 36,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 24),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.tap_and_play, color: Color(0xFF14B8A6), size: 20),
-              SizedBox(width: 10),
-              Text(
-                'Tap, insert, or swipe card',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSplitContent(PosProvider provider) {
-    final cardAmount = _cardAmount;
-    final cashNeeded = cardAmount > 0 ? provider.total - cardAmount : 0.0;
-    final validSplit = cardAmount > 0 && cardAmount < provider.total;
-
-    return Column(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              const Text(
-                'Card Amount',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF334155)),
-                ),
-                child: Text(
-                  _cardInput.isEmpty ? '0.00' : _cardInput,
-                  style: TextStyle(
-                    color: _cardInput.isEmpty
-                        ? const Color(0xFF475569)
-                        : Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (_cardInput.isNotEmpty)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Cash Required',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                    ),
-                    Text(
-                      validSplit
-                          ? '\$${cashNeeded.toStringAsFixed(2)}'
-                          : 'Invalid amount',
-                      style: TextStyle(
-                        color: validSplit
-                            ? const Color(0xFF22C55E)
-                            : const Color(0xFFEF4444),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        ),
-        Flexible(
-          flex: 1,
-          child: _buildNumpad(isSplit: true),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAmountDisplay(String label, String value) {
+  Widget _buildVoucherContent(PosProvider provider) {
+    const vouchers = ['WELCOME5', 'STAFF10', 'SUMMER15'];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      key: const Key('voucher-mode-content'),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
-          const SizedBox(height: 4),
+          const Text(
+            'Voucher Options',
+            style: TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: vouchers.map((code) {
+              final selected = _voucherCode == code;
+              return ChoiceChip(
+                label: Text(code, style: const TextStyle(fontSize: 11)),
+                selected: selected,
+                onSelected: (_) {
+                  if (provider.cartIsEmpty) return;
+                  setState(() => _voucherCode = code);
+                  _syncDrafts(provider);
+                },
+                selectedColor: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                labelStyle: TextStyle(
+                  color: selected
+                      ? const Color(0xFF8B5CF6)
+                      : const Color(0xFF94A3B8),
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 10),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0xFF334155)),
             ),
             child: Text(
-              value.isEmpty ? '0.00' : value,
+              _voucherCode.isEmpty
+                  ? 'Waiting for voucher QR scan...'
+                  : 'Voucher: $_voucherCode',
               style: TextStyle(
-                color: value.isEmpty ? const Color(0xFF475569) : Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+                color: _voucherCode.isEmpty
+                    ? const Color(0xFF64748B)
+                    : Colors.white,
+                fontSize: 12,
               ),
             ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    if (provider.cartIsEmpty) return;
+                    setState(() => _voucherCode = 'QR-VOUCHER');
+                    _syncDrafts(provider);
+                  },
+                  icon: const Icon(Icons.qr_code_scanner, size: 16),
+                  label: const Text('Scan QR', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF8B5CF6),
+                    side: const BorderSide(color: Color(0xFF8B5CF6)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _voucherCode.isEmpty
+                      ? null
+                      : () {
+                          if (provider.cartIsEmpty) return;
+                          setState(() => _voucherCode = '');
+                          _syncDrafts(provider);
+                        },
+                  icon: const Icon(Icons.clear, size: 16),
+                  label: const Text('Clear', style: TextStyle(fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF94A3B8),
+                    side: const BorderSide(color: Color(0xFF334155)),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickAmounts(double total) {
-    final suggestions = _quickAmounts(total);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: suggestions.map((amount) {
-          final isExact = amount == total;
-          final label = isExact ? 'Exact' : '\$${amount.toInt()}';
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: GestureDetector(
-                onTap: () => _setQuickAmount(amount),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isExact
-                        ? const Color(0xFF14B8A6).withValues(alpha: 0.2)
-                        : const Color(0xFF334155),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isExact
-                          ? const Color(0xFF14B8A6)
-                          : Colors.transparent,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: isExact
-                            ? const Color(0xFF14B8A6)
-                            : Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
+  Widget _buildCashDenominationGrid(PosProvider provider) {
+    final visible = provider.visibleCashDenominations;
+    final rows = <List<double>>[];
+    for (var i = 0; i < visible.length; i += 3) {
+      rows.add(
+        visible.sublist(
+          i,
+          (i + 3) > visible.length ? visible.length : i + 3,
+        ),
+      );
+    }
 
-  Widget _buildNumpad({bool isSplit = false}) {
-    const rows = [
-      ['7', '8', '9'],
-      ['4', '5', '6'],
-      ['1', '2', '3'],
-      ['.', '0', '⌫'],
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: Column(
-        children: rows.map((row) {
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 5),
-              child: Row(
-                children: row.map((key) {
-                  final isBackspace = key == '⌫';
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      child: Material(
-                        color: isBackspace
-                            ? const Color(0xFF334155)
-                            : const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(10),
-                        child: InkWell(
-                          onTap: () => _onNumpadKey(key, isSplit: isSplit),
-                          borderRadius: BorderRadius.circular(10),
-                          child: Center(
-                            child: Text(
-                              key,
-                              style: TextStyle(
-                                color: isBackspace
-                                    ? const Color(0xFF94A3B8)
-                                    : Colors.white,
-                                fontSize: isBackspace ? 20 : 22,
-                                fontWeight: FontWeight.w600,
+    if (rows.isEmpty) {
+      return const Center(
+        child: Text(
+          'No cash denominations configured',
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: Column(
+            children: rows.map((row) {
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: row.map((amount) {
+                      final count = provider.cashTenderCountFor(amount);
+                      final label = _cashDenominationLabel(amount);
+                      final isEnabled =
+                          provider.isCashDenominationEnabled(amount) &&
+                          !provider.cartIsEmpty &&
+                          provider.hasActiveShift &&
+                          !_isProcessing;
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: Material(
+                            color: const Color(0xFF1E293B),
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              key: Key('cash-denomination-$label'),
+                              onTap: isEnabled
+                                  ? () => _onCashDenominationTap(provider, amount)
+                                  : null,
+                              borderRadius: BorderRadius.circular(10),
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      label,
+                                      style: TextStyle(
+                                        color: isEnabled
+                                            ? Colors.white
+                                            : const Color(0xFF64748B),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      count > 0 ? 'x$count' : ' ',
+                                      style: TextStyle(
+                                        color: isEnabled
+                                            ? const Color(0xFF14B8A6)
+                                            : const Color(0xFF475569),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildProcessButton(PosProvider provider) {
-    final canProcess = _canProcess(provider);
-    final label = switch (_tenderType) {
-      TenderType.cash => 'Process Cash Payment',
-      TenderType.card => 'Process Card Payment',
-      TenderType.split => 'Process Split Payment',
-    };
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-      child: SizedBox(
-        width: double.infinity,
-        height: 50,
-        child: ElevatedButton.icon(
-          onPressed: canProcess ? () => _processPayment(provider) : null,
-          icon: const Icon(Icons.check_circle_outline, size: 20),
-          label: Text(label),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF14B8A6),
-            disabledBackgroundColor: const Color(0xFF1E293B),
-            foregroundColor: Colors.white,
-            disabledForegroundColor: const Color(0xFF475569),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -754,144 +683,8 @@ class _TransactionCard extends StatelessWidget {
         return const Color(0xFF14B8A6);
       case TenderType.split:
         return const Color(0xFFF59E0B);
+      case TenderType.voucher:
+        return const Color(0xFF8B5CF6);
     }
-  }
-}
-
-class _SuccessDialog extends StatelessWidget {
-  const _SuccessDialog({required this.transaction});
-
-  final Transaction transaction;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = transaction;
-    return Dialog(
-      backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: const BoxDecoration(
-                color: Color(0xFF22C55E),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check, color: Colors.white, size: 40),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Payment Successful',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              t.id,
-              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-            ),
-            const SizedBox(height: 24),
-            _DialogRow(
-              'Items',
-              '${t.itemCount} item${t.itemCount != 1 ? 's' : ''}',
-            ),
-            _DialogRow('Subtotal', '\$${t.subtotal.toStringAsFixed(2)}'),
-            _DialogRow('Tax', '\$${t.tax.toStringAsFixed(2)}'),
-            const Divider(color: Color(0xFF334155), height: 20),
-            _DialogRow(
-              'Total',
-              '\$${t.total.toStringAsFixed(2)}',
-              bold: true,
-            ),
-            const SizedBox(height: 8),
-            _DialogRow(
-              'Tender',
-              '${t.tenderType.emoji} ${t.tenderType.label}',
-            ),
-            if (t.tenderType == TenderType.cash || t.tenderType == TenderType.split) ...[
-              if (t.cashAmount > 0)
-                _DialogRow('Cash', '\$${t.cashAmount.toStringAsFixed(2)}'),
-              if (t.cardAmount > 0)
-                _DialogRow('Card', '\$${t.cardAmount.toStringAsFixed(2)}'),
-              if (t.change > 0)
-                _DialogRow(
-                  'Change',
-                  '\$${t.change.toStringAsFixed(2)}',
-                  valueColor: const Color(0xFF22C55E),
-                ),
-            ],
-            const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF14B8A6),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'New Order',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DialogRow extends StatelessWidget {
-  const _DialogRow(
-    this.label,
-    this.value, {
-    this.bold = false,
-    this.valueColor,
-  });
-
-  final String label;
-  final String value;
-  final bool bold;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: bold ? Colors.white : const Color(0xFF94A3B8),
-              fontSize: bold ? 15 : 13,
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(
-              color: valueColor ??
-                  (bold ? const Color(0xFF14B8A6) : Colors.white),
-              fontSize: bold ? 16 : 13,
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter/material.dart' show Color;
 import '../models/business_day.dart';
 import '../models/shift.dart';
+import '../models/suspended_order.dart';
 import '../models/transaction.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
@@ -61,6 +62,67 @@ class PosRepository {
             closedById: Value(shift.closedById),
           ),
         );
+  }
+
+  // ── Suspended Orders ───────────────────────────────────────────────────────────
+
+  Future<List<SuspendedOrder>> loadSuspendedOrdersForShift(String shiftId) async {
+    final rows = await (_db.select(_db.suspendedOrders)
+          ..where((t) => t.shiftId.equals(shiftId))
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+        .get();
+
+    final result = <SuspendedOrder>[];
+    for (final row in rows) {
+      final itemRows = await (_db.select(_db.suspendedOrderItems)
+            ..where((i) => i.suspendedOrderId.equals(row.id)))
+          .get();
+      result.add(_toSuspendedOrder(row, itemRows));
+    }
+    return result;
+  }
+
+  Future<void> saveSuspendedOrder(SuspendedOrder order) async {
+    await _db.transaction(() async {
+      await _db.into(_db.suspendedOrders).insertOnConflictUpdate(
+            SuspendedOrdersCompanion(
+              id: Value(order.id),
+              shiftId: Value(order.shiftId),
+              orderLabel: Value(order.orderLabel),
+              cashierId: Value(order.cashierId),
+              cashierName: Value(order.cashierName),
+              createdAt: Value(order.createdAt),
+              updatedAt: Value(order.updatedAt),
+            ),
+          );
+      await (_db.delete(_db.suspendedOrderItems)
+            ..where((t) => t.suspendedOrderId.equals(order.id)))
+          .go();
+      for (final item in order.items) {
+        await _db.into(_db.suspendedOrderItems).insert(
+              SuspendedOrderItemsCompanion.insert(
+                suspendedOrderId: order.id,
+                productId: item.product.id,
+                productName: item.product.name,
+                productPrice: item.product.price,
+                productCategory: item.product.category,
+                productEmoji: item.product.emoji,
+                productColor: item.product.color.toARGB32(),
+                quantity: item.quantity,
+              ),
+            );
+      }
+    });
+  }
+
+  Future<void> deleteSuspendedOrder(String orderId) async {
+    await _db.transaction(() async {
+      await (_db.delete(_db.suspendedOrderItems)
+            ..where((t) => t.suspendedOrderId.equals(orderId)))
+          .go();
+      await (_db.delete(_db.suspendedOrders)..where((t) => t.id.equals(orderId)))
+          .go();
+    });
   }
 
   // ── Transactions ──────────────────────────────────────────────────────────────
@@ -184,6 +246,38 @@ class PosRepository {
       shiftId: r.shiftId,
       cashierId: r.cashierId,
       cashierName: r.cashierName,
+    );
+  }
+
+  SuspendedOrder _toSuspendedOrder(
+    SuspendedOrderRow row,
+    List<SuspendedOrderItemRow> itemRows,
+  ) {
+    final items = itemRows
+        .map(
+          (i) => CartItem(
+            product: Product(
+              id: i.productId,
+              name: i.productName,
+              price: i.productPrice,
+              category: i.productCategory,
+              emoji: i.productEmoji,
+              color: Color(i.productColor),
+            ),
+            quantity: i.quantity,
+          ),
+        )
+        .toList();
+
+    return SuspendedOrder(
+      id: row.id,
+      shiftId: row.shiftId,
+      orderLabel: row.orderLabel,
+      items: items,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      cashierId: row.cashierId,
+      cashierName: row.cashierName,
     );
   }
 }

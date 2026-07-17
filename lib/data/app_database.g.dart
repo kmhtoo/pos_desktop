@@ -2579,6 +2579,1062 @@ class CartItemsCompanion extends UpdateCompanion<CartItemRow> {
   }
 }
 
+class $SuspendedOrdersTable extends SuspendedOrders
+    with TableInfo<$SuspendedOrdersTable, SuspendedOrderRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SuspendedOrdersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _shiftIdMeta = const VerificationMeta(
+    'shiftId',
+  );
+  @override
+  late final GeneratedColumn<String> shiftId = GeneratedColumn<String>(
+    'shift_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _orderLabelMeta = const VerificationMeta(
+    'orderLabel',
+  );
+  @override
+  late final GeneratedColumn<String> orderLabel = GeneratedColumn<String>(
+    'order_label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cashierIdMeta = const VerificationMeta(
+    'cashierId',
+  );
+  @override
+  late final GeneratedColumn<String> cashierId = GeneratedColumn<String>(
+    'cashier_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cashierNameMeta = const VerificationMeta(
+    'cashierName',
+  );
+  @override
+  late final GeneratedColumn<String> cashierName = GeneratedColumn<String>(
+    'cashier_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    shiftId,
+    orderLabel,
+    cashierId,
+    cashierName,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'suspended_orders';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SuspendedOrderRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('shift_id')) {
+      context.handle(
+        _shiftIdMeta,
+        shiftId.isAcceptableOrUnknown(data['shift_id']!, _shiftIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_shiftIdMeta);
+    }
+    if (data.containsKey('order_label')) {
+      context.handle(
+        _orderLabelMeta,
+        orderLabel.isAcceptableOrUnknown(data['order_label']!, _orderLabelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_orderLabelMeta);
+    }
+    if (data.containsKey('cashier_id')) {
+      context.handle(
+        _cashierIdMeta,
+        cashierId.isAcceptableOrUnknown(data['cashier_id']!, _cashierIdMeta),
+      );
+    }
+    if (data.containsKey('cashier_name')) {
+      context.handle(
+        _cashierNameMeta,
+        cashierName.isAcceptableOrUnknown(
+          data['cashier_name']!,
+          _cashierNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SuspendedOrderRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SuspendedOrderRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      shiftId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}shift_id'],
+      )!,
+      orderLabel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}order_label'],
+      )!,
+      cashierId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cashier_id'],
+      ),
+      cashierName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cashier_name'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SuspendedOrdersTable createAlias(String alias) {
+    return $SuspendedOrdersTable(attachedDatabase, alias);
+  }
+}
+
+class SuspendedOrderRow extends DataClass
+    implements Insertable<SuspendedOrderRow> {
+  final String id;
+  final String shiftId;
+  final String orderLabel;
+  final String? cashierId;
+  final String? cashierName;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const SuspendedOrderRow({
+    required this.id,
+    required this.shiftId,
+    required this.orderLabel,
+    this.cashierId,
+    this.cashierName,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['shift_id'] = Variable<String>(shiftId);
+    map['order_label'] = Variable<String>(orderLabel);
+    if (!nullToAbsent || cashierId != null) {
+      map['cashier_id'] = Variable<String>(cashierId);
+    }
+    if (!nullToAbsent || cashierName != null) {
+      map['cashier_name'] = Variable<String>(cashierName);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  SuspendedOrdersCompanion toCompanion(bool nullToAbsent) {
+    return SuspendedOrdersCompanion(
+      id: Value(id),
+      shiftId: Value(shiftId),
+      orderLabel: Value(orderLabel),
+      cashierId: cashierId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cashierId),
+      cashierName: cashierName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cashierName),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SuspendedOrderRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SuspendedOrderRow(
+      id: serializer.fromJson<String>(json['id']),
+      shiftId: serializer.fromJson<String>(json['shiftId']),
+      orderLabel: serializer.fromJson<String>(json['orderLabel']),
+      cashierId: serializer.fromJson<String?>(json['cashierId']),
+      cashierName: serializer.fromJson<String?>(json['cashierName']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'shiftId': serializer.toJson<String>(shiftId),
+      'orderLabel': serializer.toJson<String>(orderLabel),
+      'cashierId': serializer.toJson<String?>(cashierId),
+      'cashierName': serializer.toJson<String?>(cashierName),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  SuspendedOrderRow copyWith({
+    String? id,
+    String? shiftId,
+    String? orderLabel,
+    Value<String?> cashierId = const Value.absent(),
+    Value<String?> cashierName = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => SuspendedOrderRow(
+    id: id ?? this.id,
+    shiftId: shiftId ?? this.shiftId,
+    orderLabel: orderLabel ?? this.orderLabel,
+    cashierId: cashierId.present ? cashierId.value : this.cashierId,
+    cashierName: cashierName.present ? cashierName.value : this.cashierName,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SuspendedOrderRow copyWithCompanion(SuspendedOrdersCompanion data) {
+    return SuspendedOrderRow(
+      id: data.id.present ? data.id.value : this.id,
+      shiftId: data.shiftId.present ? data.shiftId.value : this.shiftId,
+      orderLabel: data.orderLabel.present
+          ? data.orderLabel.value
+          : this.orderLabel,
+      cashierId: data.cashierId.present ? data.cashierId.value : this.cashierId,
+      cashierName: data.cashierName.present
+          ? data.cashierName.value
+          : this.cashierName,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SuspendedOrderRow(')
+          ..write('id: $id, ')
+          ..write('shiftId: $shiftId, ')
+          ..write('orderLabel: $orderLabel, ')
+          ..write('cashierId: $cashierId, ')
+          ..write('cashierName: $cashierName, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    shiftId,
+    orderLabel,
+    cashierId,
+    cashierName,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SuspendedOrderRow &&
+          other.id == this.id &&
+          other.shiftId == this.shiftId &&
+          other.orderLabel == this.orderLabel &&
+          other.cashierId == this.cashierId &&
+          other.cashierName == this.cashierName &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SuspendedOrdersCompanion extends UpdateCompanion<SuspendedOrderRow> {
+  final Value<String> id;
+  final Value<String> shiftId;
+  final Value<String> orderLabel;
+  final Value<String?> cashierId;
+  final Value<String?> cashierName;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const SuspendedOrdersCompanion({
+    this.id = const Value.absent(),
+    this.shiftId = const Value.absent(),
+    this.orderLabel = const Value.absent(),
+    this.cashierId = const Value.absent(),
+    this.cashierName = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SuspendedOrdersCompanion.insert({
+    required String id,
+    required String shiftId,
+    required String orderLabel,
+    this.cashierId = const Value.absent(),
+    this.cashierName = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       shiftId = Value(shiftId),
+       orderLabel = Value(orderLabel),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<SuspendedOrderRow> custom({
+    Expression<String>? id,
+    Expression<String>? shiftId,
+    Expression<String>? orderLabel,
+    Expression<String>? cashierId,
+    Expression<String>? cashierName,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (shiftId != null) 'shift_id': shiftId,
+      if (orderLabel != null) 'order_label': orderLabel,
+      if (cashierId != null) 'cashier_id': cashierId,
+      if (cashierName != null) 'cashier_name': cashierName,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SuspendedOrdersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? shiftId,
+    Value<String>? orderLabel,
+    Value<String?>? cashierId,
+    Value<String?>? cashierName,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SuspendedOrdersCompanion(
+      id: id ?? this.id,
+      shiftId: shiftId ?? this.shiftId,
+      orderLabel: orderLabel ?? this.orderLabel,
+      cashierId: cashierId ?? this.cashierId,
+      cashierName: cashierName ?? this.cashierName,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (shiftId.present) {
+      map['shift_id'] = Variable<String>(shiftId.value);
+    }
+    if (orderLabel.present) {
+      map['order_label'] = Variable<String>(orderLabel.value);
+    }
+    if (cashierId.present) {
+      map['cashier_id'] = Variable<String>(cashierId.value);
+    }
+    if (cashierName.present) {
+      map['cashier_name'] = Variable<String>(cashierName.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SuspendedOrdersCompanion(')
+          ..write('id: $id, ')
+          ..write('shiftId: $shiftId, ')
+          ..write('orderLabel: $orderLabel, ')
+          ..write('cashierId: $cashierId, ')
+          ..write('cashierName: $cashierName, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SuspendedOrderItemsTable extends SuspendedOrderItems
+    with TableInfo<$SuspendedOrderItemsTable, SuspendedOrderItemRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SuspendedOrderItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _suspendedOrderIdMeta = const VerificationMeta(
+    'suspendedOrderId',
+  );
+  @override
+  late final GeneratedColumn<String> suspendedOrderId = GeneratedColumn<String>(
+    'suspended_order_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _productIdMeta = const VerificationMeta(
+    'productId',
+  );
+  @override
+  late final GeneratedColumn<String> productId = GeneratedColumn<String>(
+    'product_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _productNameMeta = const VerificationMeta(
+    'productName',
+  );
+  @override
+  late final GeneratedColumn<String> productName = GeneratedColumn<String>(
+    'product_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _productPriceMeta = const VerificationMeta(
+    'productPrice',
+  );
+  @override
+  late final GeneratedColumn<double> productPrice = GeneratedColumn<double>(
+    'product_price',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _productCategoryMeta = const VerificationMeta(
+    'productCategory',
+  );
+  @override
+  late final GeneratedColumn<String> productCategory = GeneratedColumn<String>(
+    'product_category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _productEmojiMeta = const VerificationMeta(
+    'productEmoji',
+  );
+  @override
+  late final GeneratedColumn<String> productEmoji = GeneratedColumn<String>(
+    'product_emoji',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _productColorMeta = const VerificationMeta(
+    'productColor',
+  );
+  @override
+  late final GeneratedColumn<int> productColor = GeneratedColumn<int>(
+    'product_color',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _quantityMeta = const VerificationMeta(
+    'quantity',
+  );
+  @override
+  late final GeneratedColumn<int> quantity = GeneratedColumn<int>(
+    'quantity',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    suspendedOrderId,
+    productId,
+    productName,
+    productPrice,
+    productCategory,
+    productEmoji,
+    productColor,
+    quantity,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'suspended_order_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SuspendedOrderItemRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('suspended_order_id')) {
+      context.handle(
+        _suspendedOrderIdMeta,
+        suspendedOrderId.isAcceptableOrUnknown(
+          data['suspended_order_id']!,
+          _suspendedOrderIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_suspendedOrderIdMeta);
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(
+        _productIdMeta,
+        productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('product_name')) {
+      context.handle(
+        _productNameMeta,
+        productName.isAcceptableOrUnknown(
+          data['product_name']!,
+          _productNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_productNameMeta);
+    }
+    if (data.containsKey('product_price')) {
+      context.handle(
+        _productPriceMeta,
+        productPrice.isAcceptableOrUnknown(
+          data['product_price']!,
+          _productPriceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_productPriceMeta);
+    }
+    if (data.containsKey('product_category')) {
+      context.handle(
+        _productCategoryMeta,
+        productCategory.isAcceptableOrUnknown(
+          data['product_category']!,
+          _productCategoryMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_productCategoryMeta);
+    }
+    if (data.containsKey('product_emoji')) {
+      context.handle(
+        _productEmojiMeta,
+        productEmoji.isAcceptableOrUnknown(
+          data['product_emoji']!,
+          _productEmojiMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_productEmojiMeta);
+    }
+    if (data.containsKey('product_color')) {
+      context.handle(
+        _productColorMeta,
+        productColor.isAcceptableOrUnknown(
+          data['product_color']!,
+          _productColorMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_productColorMeta);
+    }
+    if (data.containsKey('quantity')) {
+      context.handle(
+        _quantityMeta,
+        quantity.isAcceptableOrUnknown(data['quantity']!, _quantityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_quantityMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SuspendedOrderItemRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SuspendedOrderItemRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      suspendedOrderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}suspended_order_id'],
+      )!,
+      productId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}product_id'],
+      )!,
+      productName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}product_name'],
+      )!,
+      productPrice: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}product_price'],
+      )!,
+      productCategory: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}product_category'],
+      )!,
+      productEmoji: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}product_emoji'],
+      )!,
+      productColor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}product_color'],
+      )!,
+      quantity: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quantity'],
+      )!,
+    );
+  }
+
+  @override
+  $SuspendedOrderItemsTable createAlias(String alias) {
+    return $SuspendedOrderItemsTable(attachedDatabase, alias);
+  }
+}
+
+class SuspendedOrderItemRow extends DataClass
+    implements Insertable<SuspendedOrderItemRow> {
+  final int id;
+  final String suspendedOrderId;
+  final String productId;
+  final String productName;
+  final double productPrice;
+  final String productCategory;
+  final String productEmoji;
+  final int productColor;
+  final int quantity;
+  const SuspendedOrderItemRow({
+    required this.id,
+    required this.suspendedOrderId,
+    required this.productId,
+    required this.productName,
+    required this.productPrice,
+    required this.productCategory,
+    required this.productEmoji,
+    required this.productColor,
+    required this.quantity,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['suspended_order_id'] = Variable<String>(suspendedOrderId);
+    map['product_id'] = Variable<String>(productId);
+    map['product_name'] = Variable<String>(productName);
+    map['product_price'] = Variable<double>(productPrice);
+    map['product_category'] = Variable<String>(productCategory);
+    map['product_emoji'] = Variable<String>(productEmoji);
+    map['product_color'] = Variable<int>(productColor);
+    map['quantity'] = Variable<int>(quantity);
+    return map;
+  }
+
+  SuspendedOrderItemsCompanion toCompanion(bool nullToAbsent) {
+    return SuspendedOrderItemsCompanion(
+      id: Value(id),
+      suspendedOrderId: Value(suspendedOrderId),
+      productId: Value(productId),
+      productName: Value(productName),
+      productPrice: Value(productPrice),
+      productCategory: Value(productCategory),
+      productEmoji: Value(productEmoji),
+      productColor: Value(productColor),
+      quantity: Value(quantity),
+    );
+  }
+
+  factory SuspendedOrderItemRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SuspendedOrderItemRow(
+      id: serializer.fromJson<int>(json['id']),
+      suspendedOrderId: serializer.fromJson<String>(json['suspendedOrderId']),
+      productId: serializer.fromJson<String>(json['productId']),
+      productName: serializer.fromJson<String>(json['productName']),
+      productPrice: serializer.fromJson<double>(json['productPrice']),
+      productCategory: serializer.fromJson<String>(json['productCategory']),
+      productEmoji: serializer.fromJson<String>(json['productEmoji']),
+      productColor: serializer.fromJson<int>(json['productColor']),
+      quantity: serializer.fromJson<int>(json['quantity']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'suspendedOrderId': serializer.toJson<String>(suspendedOrderId),
+      'productId': serializer.toJson<String>(productId),
+      'productName': serializer.toJson<String>(productName),
+      'productPrice': serializer.toJson<double>(productPrice),
+      'productCategory': serializer.toJson<String>(productCategory),
+      'productEmoji': serializer.toJson<String>(productEmoji),
+      'productColor': serializer.toJson<int>(productColor),
+      'quantity': serializer.toJson<int>(quantity),
+    };
+  }
+
+  SuspendedOrderItemRow copyWith({
+    int? id,
+    String? suspendedOrderId,
+    String? productId,
+    String? productName,
+    double? productPrice,
+    String? productCategory,
+    String? productEmoji,
+    int? productColor,
+    int? quantity,
+  }) => SuspendedOrderItemRow(
+    id: id ?? this.id,
+    suspendedOrderId: suspendedOrderId ?? this.suspendedOrderId,
+    productId: productId ?? this.productId,
+    productName: productName ?? this.productName,
+    productPrice: productPrice ?? this.productPrice,
+    productCategory: productCategory ?? this.productCategory,
+    productEmoji: productEmoji ?? this.productEmoji,
+    productColor: productColor ?? this.productColor,
+    quantity: quantity ?? this.quantity,
+  );
+  SuspendedOrderItemRow copyWithCompanion(SuspendedOrderItemsCompanion data) {
+    return SuspendedOrderItemRow(
+      id: data.id.present ? data.id.value : this.id,
+      suspendedOrderId: data.suspendedOrderId.present
+          ? data.suspendedOrderId.value
+          : this.suspendedOrderId,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      productName: data.productName.present
+          ? data.productName.value
+          : this.productName,
+      productPrice: data.productPrice.present
+          ? data.productPrice.value
+          : this.productPrice,
+      productCategory: data.productCategory.present
+          ? data.productCategory.value
+          : this.productCategory,
+      productEmoji: data.productEmoji.present
+          ? data.productEmoji.value
+          : this.productEmoji,
+      productColor: data.productColor.present
+          ? data.productColor.value
+          : this.productColor,
+      quantity: data.quantity.present ? data.quantity.value : this.quantity,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SuspendedOrderItemRow(')
+          ..write('id: $id, ')
+          ..write('suspendedOrderId: $suspendedOrderId, ')
+          ..write('productId: $productId, ')
+          ..write('productName: $productName, ')
+          ..write('productPrice: $productPrice, ')
+          ..write('productCategory: $productCategory, ')
+          ..write('productEmoji: $productEmoji, ')
+          ..write('productColor: $productColor, ')
+          ..write('quantity: $quantity')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    suspendedOrderId,
+    productId,
+    productName,
+    productPrice,
+    productCategory,
+    productEmoji,
+    productColor,
+    quantity,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SuspendedOrderItemRow &&
+          other.id == this.id &&
+          other.suspendedOrderId == this.suspendedOrderId &&
+          other.productId == this.productId &&
+          other.productName == this.productName &&
+          other.productPrice == this.productPrice &&
+          other.productCategory == this.productCategory &&
+          other.productEmoji == this.productEmoji &&
+          other.productColor == this.productColor &&
+          other.quantity == this.quantity);
+}
+
+class SuspendedOrderItemsCompanion
+    extends UpdateCompanion<SuspendedOrderItemRow> {
+  final Value<int> id;
+  final Value<String> suspendedOrderId;
+  final Value<String> productId;
+  final Value<String> productName;
+  final Value<double> productPrice;
+  final Value<String> productCategory;
+  final Value<String> productEmoji;
+  final Value<int> productColor;
+  final Value<int> quantity;
+  const SuspendedOrderItemsCompanion({
+    this.id = const Value.absent(),
+    this.suspendedOrderId = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.productName = const Value.absent(),
+    this.productPrice = const Value.absent(),
+    this.productCategory = const Value.absent(),
+    this.productEmoji = const Value.absent(),
+    this.productColor = const Value.absent(),
+    this.quantity = const Value.absent(),
+  });
+  SuspendedOrderItemsCompanion.insert({
+    this.id = const Value.absent(),
+    required String suspendedOrderId,
+    required String productId,
+    required String productName,
+    required double productPrice,
+    required String productCategory,
+    required String productEmoji,
+    required int productColor,
+    required int quantity,
+  }) : suspendedOrderId = Value(suspendedOrderId),
+       productId = Value(productId),
+       productName = Value(productName),
+       productPrice = Value(productPrice),
+       productCategory = Value(productCategory),
+       productEmoji = Value(productEmoji),
+       productColor = Value(productColor),
+       quantity = Value(quantity);
+  static Insertable<SuspendedOrderItemRow> custom({
+    Expression<int>? id,
+    Expression<String>? suspendedOrderId,
+    Expression<String>? productId,
+    Expression<String>? productName,
+    Expression<double>? productPrice,
+    Expression<String>? productCategory,
+    Expression<String>? productEmoji,
+    Expression<int>? productColor,
+    Expression<int>? quantity,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (suspendedOrderId != null) 'suspended_order_id': suspendedOrderId,
+      if (productId != null) 'product_id': productId,
+      if (productName != null) 'product_name': productName,
+      if (productPrice != null) 'product_price': productPrice,
+      if (productCategory != null) 'product_category': productCategory,
+      if (productEmoji != null) 'product_emoji': productEmoji,
+      if (productColor != null) 'product_color': productColor,
+      if (quantity != null) 'quantity': quantity,
+    });
+  }
+
+  SuspendedOrderItemsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? suspendedOrderId,
+    Value<String>? productId,
+    Value<String>? productName,
+    Value<double>? productPrice,
+    Value<String>? productCategory,
+    Value<String>? productEmoji,
+    Value<int>? productColor,
+    Value<int>? quantity,
+  }) {
+    return SuspendedOrderItemsCompanion(
+      id: id ?? this.id,
+      suspendedOrderId: suspendedOrderId ?? this.suspendedOrderId,
+      productId: productId ?? this.productId,
+      productName: productName ?? this.productName,
+      productPrice: productPrice ?? this.productPrice,
+      productCategory: productCategory ?? this.productCategory,
+      productEmoji: productEmoji ?? this.productEmoji,
+      productColor: productColor ?? this.productColor,
+      quantity: quantity ?? this.quantity,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (suspendedOrderId.present) {
+      map['suspended_order_id'] = Variable<String>(suspendedOrderId.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<String>(productId.value);
+    }
+    if (productName.present) {
+      map['product_name'] = Variable<String>(productName.value);
+    }
+    if (productPrice.present) {
+      map['product_price'] = Variable<double>(productPrice.value);
+    }
+    if (productCategory.present) {
+      map['product_category'] = Variable<String>(productCategory.value);
+    }
+    if (productEmoji.present) {
+      map['product_emoji'] = Variable<String>(productEmoji.value);
+    }
+    if (productColor.present) {
+      map['product_color'] = Variable<int>(productColor.value);
+    }
+    if (quantity.present) {
+      map['quantity'] = Variable<int>(quantity.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SuspendedOrderItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('suspendedOrderId: $suspendedOrderId, ')
+          ..write('productId: $productId, ')
+          ..write('productName: $productName, ')
+          ..write('productPrice: $productPrice, ')
+          ..write('productCategory: $productCategory, ')
+          ..write('productEmoji: $productEmoji, ')
+          ..write('productColor: $productColor, ')
+          ..write('quantity: $quantity')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2586,6 +3642,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ShiftsTable shifts = $ShiftsTable(this);
   late final $TransactionsTable transactions = $TransactionsTable(this);
   late final $CartItemsTable cartItems = $CartItemsTable(this);
+  late final $SuspendedOrdersTable suspendedOrders = $SuspendedOrdersTable(
+    this,
+  );
+  late final $SuspendedOrderItemsTable suspendedOrderItems =
+      $SuspendedOrderItemsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2595,6 +3656,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     shifts,
     transactions,
     cartItems,
+    suspendedOrders,
+    suspendedOrderItems,
   ];
 }
 
@@ -3829,6 +4892,552 @@ typedef $$CartItemsTableProcessedTableManager =
       CartItemRow,
       PrefetchHooks Function()
     >;
+typedef $$SuspendedOrdersTableCreateCompanionBuilder =
+    SuspendedOrdersCompanion Function({
+      required String id,
+      required String shiftId,
+      required String orderLabel,
+      Value<String?> cashierId,
+      Value<String?> cashierName,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$SuspendedOrdersTableUpdateCompanionBuilder =
+    SuspendedOrdersCompanion Function({
+      Value<String> id,
+      Value<String> shiftId,
+      Value<String> orderLabel,
+      Value<String?> cashierId,
+      Value<String?> cashierName,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+class $$SuspendedOrdersTableFilterComposer
+    extends Composer<_$AppDatabase, $SuspendedOrdersTable> {
+  $$SuspendedOrdersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get shiftId => $composableBuilder(
+    column: $table.shiftId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get orderLabel => $composableBuilder(
+    column: $table.orderLabel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cashierId => $composableBuilder(
+    column: $table.cashierId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cashierName => $composableBuilder(
+    column: $table.cashierName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SuspendedOrdersTableOrderingComposer
+    extends Composer<_$AppDatabase, $SuspendedOrdersTable> {
+  $$SuspendedOrdersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get shiftId => $composableBuilder(
+    column: $table.shiftId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get orderLabel => $composableBuilder(
+    column: $table.orderLabel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cashierId => $composableBuilder(
+    column: $table.cashierId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cashierName => $composableBuilder(
+    column: $table.cashierName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SuspendedOrdersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SuspendedOrdersTable> {
+  $$SuspendedOrdersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get shiftId =>
+      $composableBuilder(column: $table.shiftId, builder: (column) => column);
+
+  GeneratedColumn<String> get orderLabel => $composableBuilder(
+    column: $table.orderLabel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cashierId =>
+      $composableBuilder(column: $table.cashierId, builder: (column) => column);
+
+  GeneratedColumn<String> get cashierName => $composableBuilder(
+    column: $table.cashierName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$SuspendedOrdersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SuspendedOrdersTable,
+          SuspendedOrderRow,
+          $$SuspendedOrdersTableFilterComposer,
+          $$SuspendedOrdersTableOrderingComposer,
+          $$SuspendedOrdersTableAnnotationComposer,
+          $$SuspendedOrdersTableCreateCompanionBuilder,
+          $$SuspendedOrdersTableUpdateCompanionBuilder,
+          (
+            SuspendedOrderRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SuspendedOrdersTable,
+              SuspendedOrderRow
+            >,
+          ),
+          SuspendedOrderRow,
+          PrefetchHooks Function()
+        > {
+  $$SuspendedOrdersTableTableManager(
+    _$AppDatabase db,
+    $SuspendedOrdersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SuspendedOrdersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SuspendedOrdersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SuspendedOrdersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> shiftId = const Value.absent(),
+                Value<String> orderLabel = const Value.absent(),
+                Value<String?> cashierId = const Value.absent(),
+                Value<String?> cashierName = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SuspendedOrdersCompanion(
+                id: id,
+                shiftId: shiftId,
+                orderLabel: orderLabel,
+                cashierId: cashierId,
+                cashierName: cashierName,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String shiftId,
+                required String orderLabel,
+                Value<String?> cashierId = const Value.absent(),
+                Value<String?> cashierName = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SuspendedOrdersCompanion.insert(
+                id: id,
+                shiftId: shiftId,
+                orderLabel: orderLabel,
+                cashierId: cashierId,
+                cashierName: cashierName,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SuspendedOrdersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SuspendedOrdersTable,
+      SuspendedOrderRow,
+      $$SuspendedOrdersTableFilterComposer,
+      $$SuspendedOrdersTableOrderingComposer,
+      $$SuspendedOrdersTableAnnotationComposer,
+      $$SuspendedOrdersTableCreateCompanionBuilder,
+      $$SuspendedOrdersTableUpdateCompanionBuilder,
+      (
+        SuspendedOrderRow,
+        BaseReferences<_$AppDatabase, $SuspendedOrdersTable, SuspendedOrderRow>,
+      ),
+      SuspendedOrderRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SuspendedOrderItemsTableCreateCompanionBuilder =
+    SuspendedOrderItemsCompanion Function({
+      Value<int> id,
+      required String suspendedOrderId,
+      required String productId,
+      required String productName,
+      required double productPrice,
+      required String productCategory,
+      required String productEmoji,
+      required int productColor,
+      required int quantity,
+    });
+typedef $$SuspendedOrderItemsTableUpdateCompanionBuilder =
+    SuspendedOrderItemsCompanion Function({
+      Value<int> id,
+      Value<String> suspendedOrderId,
+      Value<String> productId,
+      Value<String> productName,
+      Value<double> productPrice,
+      Value<String> productCategory,
+      Value<String> productEmoji,
+      Value<int> productColor,
+      Value<int> quantity,
+    });
+
+class $$SuspendedOrderItemsTableFilterComposer
+    extends Composer<_$AppDatabase, $SuspendedOrderItemsTable> {
+  $$SuspendedOrderItemsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get suspendedOrderId => $composableBuilder(
+    column: $table.suspendedOrderId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get productId => $composableBuilder(
+    column: $table.productId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get productName => $composableBuilder(
+    column: $table.productName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get productPrice => $composableBuilder(
+    column: $table.productPrice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get productCategory => $composableBuilder(
+    column: $table.productCategory,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get productEmoji => $composableBuilder(
+    column: $table.productEmoji,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get productColor => $composableBuilder(
+    column: $table.productColor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get quantity => $composableBuilder(
+    column: $table.quantity,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SuspendedOrderItemsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SuspendedOrderItemsTable> {
+  $$SuspendedOrderItemsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get suspendedOrderId => $composableBuilder(
+    column: $table.suspendedOrderId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get productId => $composableBuilder(
+    column: $table.productId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get productName => $composableBuilder(
+    column: $table.productName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get productPrice => $composableBuilder(
+    column: $table.productPrice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get productCategory => $composableBuilder(
+    column: $table.productCategory,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get productEmoji => $composableBuilder(
+    column: $table.productEmoji,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get productColor => $composableBuilder(
+    column: $table.productColor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get quantity => $composableBuilder(
+    column: $table.quantity,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SuspendedOrderItemsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SuspendedOrderItemsTable> {
+  $$SuspendedOrderItemsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get suspendedOrderId => $composableBuilder(
+    column: $table.suspendedOrderId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get productId =>
+      $composableBuilder(column: $table.productId, builder: (column) => column);
+
+  GeneratedColumn<String> get productName => $composableBuilder(
+    column: $table.productName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get productPrice => $composableBuilder(
+    column: $table.productPrice,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get productCategory => $composableBuilder(
+    column: $table.productCategory,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get productEmoji => $composableBuilder(
+    column: $table.productEmoji,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get productColor => $composableBuilder(
+    column: $table.productColor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get quantity =>
+      $composableBuilder(column: $table.quantity, builder: (column) => column);
+}
+
+class $$SuspendedOrderItemsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SuspendedOrderItemsTable,
+          SuspendedOrderItemRow,
+          $$SuspendedOrderItemsTableFilterComposer,
+          $$SuspendedOrderItemsTableOrderingComposer,
+          $$SuspendedOrderItemsTableAnnotationComposer,
+          $$SuspendedOrderItemsTableCreateCompanionBuilder,
+          $$SuspendedOrderItemsTableUpdateCompanionBuilder,
+          (
+            SuspendedOrderItemRow,
+            BaseReferences<
+              _$AppDatabase,
+              $SuspendedOrderItemsTable,
+              SuspendedOrderItemRow
+            >,
+          ),
+          SuspendedOrderItemRow,
+          PrefetchHooks Function()
+        > {
+  $$SuspendedOrderItemsTableTableManager(
+    _$AppDatabase db,
+    $SuspendedOrderItemsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SuspendedOrderItemsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SuspendedOrderItemsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$SuspendedOrderItemsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> suspendedOrderId = const Value.absent(),
+                Value<String> productId = const Value.absent(),
+                Value<String> productName = const Value.absent(),
+                Value<double> productPrice = const Value.absent(),
+                Value<String> productCategory = const Value.absent(),
+                Value<String> productEmoji = const Value.absent(),
+                Value<int> productColor = const Value.absent(),
+                Value<int> quantity = const Value.absent(),
+              }) => SuspendedOrderItemsCompanion(
+                id: id,
+                suspendedOrderId: suspendedOrderId,
+                productId: productId,
+                productName: productName,
+                productPrice: productPrice,
+                productCategory: productCategory,
+                productEmoji: productEmoji,
+                productColor: productColor,
+                quantity: quantity,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String suspendedOrderId,
+                required String productId,
+                required String productName,
+                required double productPrice,
+                required String productCategory,
+                required String productEmoji,
+                required int productColor,
+                required int quantity,
+              }) => SuspendedOrderItemsCompanion.insert(
+                id: id,
+                suspendedOrderId: suspendedOrderId,
+                productId: productId,
+                productName: productName,
+                productPrice: productPrice,
+                productCategory: productCategory,
+                productEmoji: productEmoji,
+                productColor: productColor,
+                quantity: quantity,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SuspendedOrderItemsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SuspendedOrderItemsTable,
+      SuspendedOrderItemRow,
+      $$SuspendedOrderItemsTableFilterComposer,
+      $$SuspendedOrderItemsTableOrderingComposer,
+      $$SuspendedOrderItemsTableAnnotationComposer,
+      $$SuspendedOrderItemsTableCreateCompanionBuilder,
+      $$SuspendedOrderItemsTableUpdateCompanionBuilder,
+      (
+        SuspendedOrderItemRow,
+        BaseReferences<
+          _$AppDatabase,
+          $SuspendedOrderItemsTable,
+          SuspendedOrderItemRow
+        >,
+      ),
+      SuspendedOrderItemRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3841,4 +5450,8 @@ class $AppDatabaseManager {
       $$TransactionsTableTableManager(_db, _db.transactions);
   $$CartItemsTableTableManager get cartItems =>
       $$CartItemsTableTableManager(_db, _db.cartItems);
+  $$SuspendedOrdersTableTableManager get suspendedOrders =>
+      $$SuspendedOrdersTableTableManager(_db, _db.suspendedOrders);
+  $$SuspendedOrderItemsTableTableManager get suspendedOrderItems =>
+      $$SuspendedOrderItemsTableTableManager(_db, _db.suspendedOrderItems);
 }

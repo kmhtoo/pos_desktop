@@ -5,6 +5,7 @@ import '../providers/pos_provider.dart';
 import '../models/transaction.dart';
 import '../models/user.dart';
 import 'login_screen.dart';
+import '../utils/app_navigation.dart';
 
 class InfoScreen extends StatefulWidget {
   const InfoScreen({super.key});
@@ -115,9 +116,10 @@ class _InfoScreenState extends State<InfoScreen> {
                         onPressed: () {
                           Navigator.of(ctx).pop();
                           context.read<PosProvider>().logout();
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
-                            (route) => false,
+                          pushAndRemoveUntilAppRoute(
+                            context,
+                            builder: (_) => const LoginScreen(),
+                            predicate: (route) => false,
                           );
                         },
                         style: ElevatedButton.styleFrom(
@@ -149,10 +151,7 @@ class _InfoScreenState extends State<InfoScreen> {
   }
 
   void _showReceiptHistory(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => const _ReceiptHistoryDialog(),
-    );
+    showDialog(context: context, builder: (_) => const _ReceiptHistoryDialog());
   }
 
   String _formatDuration(Duration d) {
@@ -218,7 +217,11 @@ class _InfoScreenState extends State<InfoScreen> {
       ),
       title: const Text(
         'Session Info',
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 17,
+        ),
       ),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
@@ -233,18 +236,29 @@ class _InfoScreenState extends State<InfoScreen> {
         Container(
           width: 88,
           height: 88,
-          decoration: const BoxDecoration(color: Color(0xFF14B8A6), shape: BoxShape.circle),
+          decoration: const BoxDecoration(
+            color: Color(0xFF14B8A6),
+            shape: BoxShape.circle,
+          ),
           child: Center(
             child: Text(
               user.initials,
-              style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
         const SizedBox(height: 14),
         Text(
           user.name,
-          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 6),
         Row(
@@ -255,22 +269,35 @@ class _InfoScreenState extends State<InfoScreen> {
               decoration: BoxDecoration(
                 color: const Color(0xFF14B8A6).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF14B8A6).withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: const Color(0xFF14B8A6).withValues(alpha: 0.3),
+                ),
               ),
               child: Text(
                 user.role,
-                style: const TextStyle(color: Color(0xFF14B8A6), fontSize: 12, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  color: Color(0xFF14B8A6),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const SizedBox(width: 10),
-            Text('ID: ${user.id}', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+            Text(
+              'ID: ${user.id}',
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+            ),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildStatsRow(BuildContext context, int receiptCount, double totalSales) {
+  Widget _buildStatsRow(
+    BuildContext context,
+    int receiptCount,
+    double totalSales,
+  ) {
     return Row(
       children: [
         Expanded(
@@ -317,9 +344,17 @@ class _InfoScreenState extends State<InfoScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          _SessionRow(icon: Icons.login, label: 'Logged in at', value: _formatTime(user.loginTime)),
+          _SessionRow(
+            icon: Icons.login,
+            label: 'Logged in at',
+            value: _formatTime(user.loginTime),
+          ),
           const SizedBox(height: 10),
-          _SessionRow(icon: Icons.timer_outlined, label: 'Session duration', value: _formatDuration(duration)),
+          _SessionRow(
+            icon: Icons.timer_outlined,
+            label: 'Session duration',
+            value: _formatDuration(duration),
+          ),
         ],
       ),
     );
@@ -338,7 +373,9 @@ class _InfoScreenState extends State<InfoScreen> {
           foregroundColor: const Color(0xFFEF4444),
           elevation: 0,
           side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
         ),
       ),
@@ -372,16 +409,27 @@ class _ReceiptHistoryDialog extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.receipt_outlined, size: 52, color: Color(0xFF334155)),
+                          Icon(
+                            Icons.receipt_outlined,
+                            size: 52,
+                            color: Color(0xFF334155),
+                          ),
                           SizedBox(height: 12),
-                          Text('No receipts yet', style: TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+                          Text(
+                            'No receipts yet',
+                            style: TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.all(16),
                       itemCount: txns.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 10),
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 10),
                       itemBuilder: (ctx, i) => _ReceiptTile(
                         transaction: txns[i],
                         onVoid: () => _confirmVoid(context, provider, txns[i]),
@@ -404,7 +452,11 @@ class _ReceiptHistoryDialog extends StatelessWidget {
           const SizedBox(width: 10),
           const Text(
             'Receipt History',
-            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(width: 10),
           if (txns.isNotEmpty)
@@ -429,7 +481,11 @@ class _ReceiptHistoryDialog extends StatelessWidget {
     );
   }
 
-  void _confirmVoid(BuildContext context, PosProvider provider, Transaction txn) {
+  void _confirmVoid(
+    BuildContext context,
+    PosProvider provider,
+    Transaction txn,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -573,7 +629,11 @@ class _ReceiptTile extends StatelessWidget {
             children: [
               Text(
                 t.id,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(width: 8),
               _badge(
@@ -595,7 +655,9 @@ class _ReceiptTile extends StatelessWidget {
               Text(
                 '\$${t.total.toStringAsFixed(2)}',
                 style: TextStyle(
-                  color: t.isVoided ? const Color(0xFF64748B) : const Color(0xFF14B8A6),
+                  color: t.isVoided
+                      ? const Color(0xFF64748B)
+                      : const Color(0xFF14B8A6),
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
                   decoration: t.isVoided ? TextDecoration.lineThrough : null,
@@ -609,11 +671,21 @@ class _ReceiptTile extends StatelessWidget {
             children: [
               const Icon(Icons.access_time, color: Color(0xFF64748B), size: 12),
               const SizedBox(width: 4),
-              Text(_fmtTime(t.timestamp), style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+              Text(
+                _fmtTime(t.timestamp),
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              ),
               const SizedBox(width: 12),
-              const Icon(Icons.shopping_bag_outlined, color: Color(0xFF64748B), size: 12),
+              const Icon(
+                Icons.shopping_bag_outlined,
+                color: Color(0xFF64748B),
+                size: 12,
+              ),
               const SizedBox(width: 4),
-              Text('${t.itemCount} items', style: const TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+              Text(
+                '${t.itemCount} items',
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              ),
             ],
           ),
           if (t.isVoided && t.voidedByName != null) ...[
@@ -626,17 +698,27 @@ class _ReceiptTile extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.person_outline, color: Color(0xFFEF4444), size: 13),
+                  const Icon(
+                    Icons.person_outline,
+                    color: Color(0xFFEF4444),
+                    size: 13,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Voided by ${t.voidedByName} (ID: ${t.voidedById})',
-                    style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11),
+                    style: const TextStyle(
+                      color: Color(0xFFEF4444),
+                      fontSize: 11,
+                    ),
                   ),
                   if (t.voidedAt != null) ...[
                     const SizedBox(width: 6),
                     Text(
                       'at ${_fmtTime(t.voidedAt!)}',
-                      style: TextStyle(color: const Color(0xFFEF4444).withValues(alpha: 0.7), fontSize: 11),
+                      style: TextStyle(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.7),
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ],
@@ -661,12 +743,20 @@ class _ReceiptTile extends StatelessWidget {
                 child: ElevatedButton.icon(
                   onPressed: onVoid,
                   icon: const Icon(Icons.block, size: 16),
-                  label: const Text('Void', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  label: const Text(
+                    'Void',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                    backgroundColor: const Color(
+                      0xFFEF4444,
+                    ).withValues(alpha: 0.2),
                     foregroundColor: const Color(0xFFEF4444),
                     elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                       side: const BorderSide(
@@ -748,7 +838,9 @@ class _StatCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: onTap != null ? color.withValues(alpha: 0.35) : const Color(0xFF334155),
+              color: onTap != null
+                  ? color.withValues(alpha: 0.35)
+                  : const Color(0xFF334155),
             ),
           ),
           child: Column(
@@ -767,19 +859,36 @@ class _StatCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   if (onTap != null)
-                    Icon(Icons.chevron_right, color: color.withValues(alpha: 0.6), size: 18),
+                    Icon(
+                      Icons.chevron_right,
+                      color: color.withValues(alpha: 0.6),
+                      size: 18,
+                    ),
                 ],
               ),
               const SizedBox(height: 14),
               Text(
                 value,
-                style: TextStyle(color: color, fontSize: 26, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: color,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
-              Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+              Text(
+                label,
+                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+              ),
               if (hint != null) ...[
                 const SizedBox(height: 2),
-                Text(hint!, style: TextStyle(color: color.withValues(alpha: 0.6), fontSize: 11)),
+                Text(
+                  hint!,
+                  style: TextStyle(
+                    color: color.withValues(alpha: 0.6),
+                    fontSize: 11,
+                  ),
+                ),
               ],
             ],
           ),
@@ -790,7 +899,11 @@ class _StatCard extends StatelessWidget {
 }
 
 class _SessionRow extends StatelessWidget {
-  const _SessionRow({required this.icon, required this.label, required this.value});
+  const _SessionRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   final IconData icon;
   final String label;
@@ -802,9 +915,19 @@ class _SessionRow extends StatelessWidget {
       children: [
         Icon(icon, color: const Color(0xFF64748B), size: 16),
         const SizedBox(width: 10),
-        Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+        ),
         const Spacer(),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }

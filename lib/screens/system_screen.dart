@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/pos_provider.dart';
 import '../models/shift.dart';
+import '../services/receipt_printer.dart';
 
 class SystemScreen extends StatelessWidget {
   const SystemScreen({super.key});
@@ -42,20 +43,28 @@ class SystemScreen extends StatelessWidget {
               _SectionLabel(label: 'CURRENT SHIFT'),
               const SizedBox(height: 8),
               _ShiftCard(provider: provider, fmt: _fmt),
+              const SizedBox(height: 20),
+              _SectionLabel(label: 'APP SETTINGS'),
+              const SizedBox(height: 8),
+              _AppSettingsCard(provider: provider),
+              const SizedBox(height: 20),
+              _SectionLabel(label: 'PRINTERS'),
+              const SizedBox(height: 8),
+              _PrinterSettingsCard(provider: provider),
               if (provider.todayShifts.any((s) => !s.isOpen)) ...[
                 const SizedBox(height: 20),
                 _SectionLabel(label: "TODAY'S SHIFTS"),
                 const SizedBox(height: 8),
                 ...provider.todayShifts
                     .where((s) => !s.isOpen)
-                    .map((s) => _PastShiftTile(
-                          shift: s,
-                          receiptCount:
-                              provider.shiftReceiptCountFor(s.id),
-                          totalSales:
-                              provider.shiftTotalSalesFor(s.id),
-                          fmt: _fmt,
-                        )),
+                    .map(
+                      (s) => _PastShiftTile(
+                        shift: s,
+                        receiptCount: provider.shiftReceiptCountFor(s.id),
+                        totalSales: provider.shiftTotalSalesFor(s.id),
+                        fmt: _fmt,
+                      ),
+                    ),
               ],
             ],
           );
@@ -162,8 +171,7 @@ class _BusinessDayCard extends StatelessWidget {
             width: double.infinity,
             child: isOpen
                 ? OutlinedButton.icon(
-                    onPressed: () =>
-                        _confirmCloseDay(context, provider),
+                    onPressed: () => _confirmCloseDay(context, provider),
                     icon: const Icon(Icons.lock_outline, size: 16),
                     label: const Text('Close Business Day'),
                     style: OutlinedButton.styleFrom(
@@ -218,8 +226,11 @@ class _BusinessDayCard extends StatelessWidget {
     if (provider.hasActiveShift) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Close the active shift before closing the business day.'),
+          content: Text(
+            'Close the active shift before closing the business day.',
+          ),
           backgroundColor: Color(0xFFEF4444),
+          duration: Duration(seconds: 5),
         ),
       );
       return;
@@ -232,6 +243,19 @@ class _BusinessDayCard extends StatelessWidget {
         iconColor: const Color(0xFFEF4444),
         message:
             'The business day will be closed. No further orders can be taken until a new day is opened.',
+        details: [
+          _ConfirmDialogDetail(
+            label: 'Day',
+            value: provider.currentBusinessDay?.id ?? '—',
+          ),
+          _ConfirmDialogDetail(
+            label: 'Shifts Done',
+            value: provider.todayShifts.where((shift) => !shift.isOpen).length
+                .toString(),
+          ),
+        ],
+        warningMessage:
+            'Make sure all takings are reviewed before ending the business day.',
         confirmLabel: 'Close Day',
         confirmColor: const Color(0xFFEF4444),
         onConfirm: () => provider.closeBusinessDay(user),
@@ -251,6 +275,7 @@ class _ShiftCard extends StatelessWidget {
     final hasDay = provider.hasActiveBusinessDay;
     final hasShift = provider.hasActiveShift;
     final available = provider.availableShiftTypes;
+    final suspendedCount = provider.suspendedOrderCount;
 
     if (!hasDay) {
       return Container(
@@ -279,9 +304,7 @@ class _ShiftCard extends StatelessWidget {
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasShift
-              ? const Color(0xFF14B8A6)
-              : const Color(0xFF334155),
+          color: hasShift ? const Color(0xFF14B8A6) : const Color(0xFF334155),
         ),
       ),
       child: Column(
@@ -290,10 +313,7 @@ class _ShiftCard extends StatelessWidget {
           if (shift != null) ...[
             Row(
               children: [
-                Text(
-                  shift.emoji,
-                  style: const TextStyle(fontSize: 20),
-                ),
+                Text(shift.emoji, style: const TextStyle(fontSize: 20)),
                 const SizedBox(width: 10),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,16 +386,19 @@ class _ShiftCard extends StatelessWidget {
                 runSpacing: 8,
                 children: available.map((type) {
                   return ElevatedButton.icon(
-                    onPressed: () =>
-                        _confirmOpenShift(context, provider, type),
-                    icon: Text(type.emoji,
-                        style: const TextStyle(fontSize: 14)),
+                    onPressed: () => _confirmOpenShift(context, provider, type),
+                    icon: Text(
+                      type.emoji,
+                      style: const TextStyle(fontSize: 14),
+                    ),
                     label: Text(type.label),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF14B8A6),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -390,14 +413,42 @@ class _ShiftCard extends StatelessWidget {
             ],
           ],
           if (hasShift) ...[
+            if (suspendedCount > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  '$suspendedCount saved order${suspendedCount == 1 ? '' : 's'} must be resumed or deleted before closing this shift.',
+                  style: const TextStyle(
+                    color: Color(0xFFFCD34D),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () =>
-                    _confirmCloseShift(context, provider, shift!),
+                onPressed: suspendedCount > 0
+                    ? () => _showSuspendedOrdersBlockMessage(
+                          context,
+                          suspendedCount,
+                        )
+                    : () => _confirmCloseShift(context, provider, shift!),
                 icon: const Icon(Icons.stop_circle_outlined, size: 16),
-                label: const Text('Close Shift'),
+                label: Text(
+                  suspendedCount > 0 ? 'Clear Saved Orders First' : 'Close Shift',
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFEF4444),
                   side: const BorderSide(color: Color(0xFFEF4444)),
@@ -415,7 +466,10 @@ class _ShiftCard extends StatelessWidget {
   }
 
   void _confirmOpenShift(
-      BuildContext context, PosProvider provider, ShiftType type) {
+    BuildContext context,
+    PosProvider provider,
+    ShiftType type,
+  ) {
     final user = provider.currentUser;
     if (user == null) return;
     showDialog(
@@ -434,9 +488,16 @@ class _ShiftCard extends StatelessWidget {
   }
 
   void _confirmCloseShift(
-      BuildContext context, PosProvider provider, Shift shift) {
+    BuildContext context,
+    PosProvider provider,
+    Shift shift,
+  ) {
     final user = provider.currentUser;
     if (user == null) return;
+    if (provider.suspendedOrderCount > 0) {
+      _showSuspendedOrdersBlockMessage(context, provider.suspendedOrderCount);
+      return;
+    }
     final count = provider.shiftReceiptCount;
     final total = provider.shiftTotalSales;
     showDialog(
@@ -446,10 +507,35 @@ class _ShiftCard extends StatelessWidget {
         icon: Icons.stop_circle_outlined,
         iconColor: const Color(0xFFEF4444),
         message:
-            '$count receipt${count != 1 ? 's' : ''} · \$${total.toStringAsFixed(2)} total\n\nNo orders can be taken after closing.',
+            'No orders can be taken after closing this shift.',
+        details: [
+          _ConfirmDialogDetail(label: 'Shift', value: shift.name),
+          _ConfirmDialogDetail(
+            label: 'Receipts',
+            value: count.toString(),
+          ),
+          _ConfirmDialogDetail(
+            label: 'Sales',
+            value: '\$${total.toStringAsFixed(2)}',
+          ),
+        ],
+        warningMessage:
+            'Check the final totals carefully before you close the shift.',
         confirmLabel: 'Close Shift',
         confirmColor: const Color(0xFFEF4444),
         onConfirm: () => provider.closeShift(user),
+      ),
+    );
+  }
+
+  void _showSuspendedOrdersBlockMessage(BuildContext context, int count) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFF59E0B),
+        duration: const Duration(seconds: 5),
+        content: Text(
+          'This shift still has $count saved order${count == 1 ? '' : 's'}. Clear them one by one in Current Order > Saved first.',
+        ),
       ),
     );
   }
@@ -495,8 +581,7 @@ class _PastShiftTile extends StatelessWidget {
               ),
               Text(
                 '${fmt(shift.openedAt)} – ${shift.closedAt != null ? fmt(shift.closedAt!) : '—'}',
-                style:
-                    const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
               ),
             ],
           ),
@@ -514,13 +599,569 @@ class _PastShiftTile extends StatelessWidget {
               ),
               Text(
                 '$receiptCount receipt${receiptCount != 1 ? 's' : ''}',
-                style:
-                    const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AppSettingsCard extends StatelessWidget {
+  const _AppSettingsCard({required this.provider});
+
+  final PosProvider provider;
+
+  String _cashDenominationLabel(double amount) {
+    if (amount < 1) return '${(amount * 100).round()}¢';
+    if (amount == amount.truncateToDouble()) return '\$${amount.toInt()}';
+    return '\$${amount.toStringAsFixed(2)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        children: [
+          _SettingToggleTile(
+            icon: Icons.animation_outlined,
+            label: 'Page Transition Animation',
+            description: 'Enable or disable page change animation.',
+            value: provider.useAnimatedPageTransitions,
+            onChanged: provider.setUseAnimatedPageTransitions,
+          ),
+          const Divider(color: Color(0xFF334155), height: 20),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Cash Denomination Settings',
+              style: TextStyle(
+                color: Color(0xFFCBD5E1),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...PosProvider.supportedCashDenominations.asMap().entries.map((entry) {
+            final denomination = entry.value;
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: entry.key ==
+                        PosProvider.supportedCashDenominations.length - 1
+                    ? 0
+                    : 8,
+              ),
+              child: _CashDenominationSettingTile(
+                label: _cashDenominationLabel(denomination),
+                isVisible: provider.isCashDenominationVisible(denomination),
+                isEnabled: provider.isCashDenominationEnabled(denomination),
+                onVisibleChanged: (value) =>
+                    provider.setCashDenominationVisibility(denomination, value),
+                onEnabledChanged: (value) =>
+                    provider.setCashDenominationEnabled(denomination, value),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _CashDenominationSettingTile extends StatelessWidget {
+  const _CashDenominationSettingTile({
+    required this.label,
+    required this.isVisible,
+    required this.isEnabled,
+    required this.onVisibleChanged,
+    required this.onEnabledChanged,
+  });
+
+  final String label;
+  final bool isVisible;
+  final bool isEnabled;
+  final ValueChanged<bool> onVisibleChanged;
+  final ValueChanged<bool> onEnabledChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Text(
+                'Show',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+              ),
+              const SizedBox(width: 6),
+              Switch(
+                value: isVisible,
+                activeThumbColor: const Color(0xFF14B8A6),
+                activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                onChanged: onVisibleChanged,
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Enable',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+              ),
+              const SizedBox(width: 6),
+              Switch(
+                value: isEnabled,
+                activeThumbColor: const Color(0xFF14B8A6),
+                activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                onChanged: onEnabledChanged,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrinterSettingsCard extends StatelessWidget {
+  const _PrinterSettingsCard({required this.provider});
+
+  final PosProvider provider;
+
+  String _roleLabel(PrinterRole role) {
+    return switch (role) {
+      PrinterRole.receipt => 'Receipt',
+      PrinterRole.kitchen => 'Kitchen',
+      PrinterRole.barcode => 'Barcode',
+      PrinterRole.label => 'Label',
+    };
+  }
+
+  String _typeLabel(PrinterConnectionType type) {
+    return switch (type) {
+      PrinterConnectionType.bluetooth => 'Bluetooth',
+      PrinterConnectionType.tcpIp => 'TCP/IP',
+      PrinterConnectionType.usb => 'USB',
+    };
+  }
+
+  String _deviceLabel(PrinterDevice device) {
+    if (device.connectionType == PrinterConnectionType.tcpIp &&
+        device.port != null) {
+      return '${device.name} • ${device.address}:${device.port}';
+    }
+    return '${device.name} • ${device.address}';
+  }
+
+  String _friendlyPrinterError(Object error, {required bool isConnectionTest}) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('operation not permitted') ||
+        message.contains('not permitted')) {
+      return 'Could not reach the printer.\n'
+          'Cause: this device has not allowed printer access yet.\n'
+          'Try: allow Local Network access for this app, then try again.\n'
+          'Tell technician: local network permission blocked.';
+    }
+    if (message.contains('timed out') || message.contains('timeout')) {
+      return isConnectionTest
+          ? 'Could not reach the printer.\n'
+              'Cause: the printer is taking too long to answer.\n'
+              'Try: check printer power, paper, and Wi-Fi, then try again.\n'
+              'Tell technician: printer not responding.'
+          : 'Could not send the test receipt.\n'
+              'Cause: the printer is taking too long to answer.\n'
+              'Try: check printer power, paper, and Wi-Fi, then try again.\n'
+              'Tell technician: printer not responding.';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connect')) {
+      return isConnectionTest
+          ? 'Could not reach the printer.\n'
+              'Cause: the app cannot find the printer on the network.\n'
+              'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
+              'Tell technician: printer connection failed.'
+          : 'Could not send the test receipt.\n'
+              'Cause: the app cannot find the printer on the network.\n'
+              'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
+              'Tell technician: printer connection failed.';
+    }
+    return isConnectionTest
+        ? 'Could not check the printer right now.\n'
+            'Cause: the printer did not answer as expected.\n'
+            'Try: wait a moment and try again.\n'
+            'Tell technician: printer check failed.'
+        : 'Could not print the test receipt right now.\n'
+            'Cause: the printer did not answer as expected.\n'
+            'Try: wait a moment and try again.\n'
+            'Tell technician: test receipt failed.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messenger = ScaffoldMessenger.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Printer Discovery & Assignment',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: provider.isDiscoveringPrinters
+                    ? null
+                    : () => provider.discoverPrinters(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0EA5E9),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  textStyle: const TextStyle(fontSize: 11),
+                ),
+                icon: provider.isDiscoveringPrinters
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.wifi_find, size: 14),
+                label: const Text('Discover'),
+              ),
+            ],
+          ),
+          if (!provider.hasPrinterManager) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Printer manager is not configured for this environment.',
+              style: TextStyle(color: Color(0xFFEF4444), fontSize: 11),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            provider.discoveredPrinters.isEmpty
+                ? 'No printers discovered yet.'
+                : '${provider.discoveredPrinters.length} printer(s) discovered',
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Tap Test Connection to allow local network access for printer setup.',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 10),
+          ),
+          const SizedBox(height: 10),
+          ...provider.printerRoles.map((role) {
+            final assigned = provider.assignedPrinterForRole(role);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          _roleLabel(role),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (assigned != null)
+                          Text(
+                            _typeLabel(assigned.connectionType),
+                            style: const TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 10,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String?>(
+                      initialValue: assigned != null && provider.discoveredPrinters.any((p) => p.id == assigned.id)
+                          ? assigned.id
+                          : null,
+                      dropdownColor: const Color(0xFF1E293B),
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: const Color(0xFF1E293B),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Unassigned'),
+                        ),
+                        ...provider.discoveredPrinters.map(
+                          (device) => DropdownMenuItem<String?>(
+                            value: device.id,
+                            child: Text(
+                              _deviceLabel(device),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        if (assigned != null && !provider.discoveredPrinters.any((p) => p.id == assigned.id))
+                          DropdownMenuItem<String?>(
+                            value: assigned.id,
+                            child: Text(
+                              '${_deviceLabel(assigned)} (auto-assigned)',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: provider.hasPrinterManager
+                          ? (value) {
+                              if (value == null) {
+                                provider.unassignPrinterRole(role);
+                                return;
+                              }
+                              PrinterDevice? device;
+                              for (final printer in provider.discoveredPrinters) {
+                                if (printer.id == value) {
+                                  device = printer;
+                                  break;
+                                }
+                              }
+                              if (device == null) return;
+                              provider.assignPrinterRole(role, device);
+                            }
+                          : null,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            assigned == null
+                                ? 'No printer assigned'
+                                : _deviceLabel(assigned),
+                            style: const TextStyle(
+                              color: Color(0xFF94A3B8),
+                              fontSize: 11,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: assigned == null || !provider.hasPrinterManager
+                              ? null
+                              : () {
+                                  provider.testPrinter(role).then((_) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        duration: const Duration(seconds: 4),
+                                        content: Text(
+                                          'Test receipt sent to ${_roleLabel(role)} printer.',
+                                        ),
+                                      ),
+                                    );
+                                  }).catchError((error) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFFB91C1C),
+                                        duration: const Duration(seconds: 5),
+                                        content: Text(
+                                          _friendlyPrinterError(
+                                            error,
+                                            isConnectionTest: false,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  });
+                                },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF14B8A6),
+                            side: const BorderSide(color: Color(0xFF14B8A6)),
+                            textStyle: const TextStyle(fontSize: 11),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                          child: const Text('Test Epson Print'),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: assigned == null || !provider.hasPrinterManager
+                              ? null
+                              : () {
+                                  provider.testPrinterConnection(role).then((_) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFF065F46),
+                                        duration: const Duration(seconds: 4),
+                                        content: Text(
+                                          '${_roleLabel(role)} printer is ready.',
+                                        ),
+                                      ),
+                                    );
+                                  }).catchError((error) {
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        backgroundColor: const Color(0xFFB91C1C),
+                                        duration: const Duration(seconds: 5),
+                                        content: Text(
+                                          _friendlyPrinterError(
+                                            error,
+                                            isConnectionTest: true,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  });
+                                },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF38BDF8),
+                            side: const BorderSide(color: Color(0xFF38BDF8)),
+                            textStyle: const TextStyle(fontSize: 11),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                          child: const Text('Test Connection'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingToggleTile extends StatelessWidget {
+  const _SettingToggleTile({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFF334155),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: const Color(0xFF94A3B8), size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          activeThumbColor: const Color(0xFF14B8A6),
+          activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }
@@ -538,8 +1179,7 @@ class _InfoRow extends StatelessWidget {
         children: [
           Text(
             '$label:',
-            style:
-                const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -564,6 +1204,8 @@ class _ConfirmDialog extends StatelessWidget {
     required this.confirmLabel,
     required this.confirmColor,
     required this.onConfirm,
+    this.details = const [],
+    this.warningMessage,
   });
 
   final String title;
@@ -573,81 +1215,257 @@ class _ConfirmDialog extends StatelessWidget {
   final String confirmLabel;
   final Color confirmColor;
   final VoidCallback onConfirm;
+  final List<_ConfirmDialogDetail> details;
+  final String? warningMessage;
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFF334155)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x55000000),
+                blurRadius: 24,
+                offset: Offset(0, 10),
               ),
-              child: Icon(icon, color: iconColor, size: 28),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF94A3B8),
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF94A3B8),
-                      side: const BorderSide(color: Color(0xFF334155)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: iconColor.withValues(alpha: 0.25),
                       ),
                     ),
-                    child: const Text('Cancel'),
+                    child: Icon(icon, color: iconColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: iconColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            confirmLabel,
+                            style: TextStyle(
+                              color: iconColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Color(0xFFCBD5E1),
+                    fontSize: 13,
+                    height: 1.45,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      onConfirm();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: confirmColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+              ),
+              if (details.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: details
+                      .map(
+                        (detail) => _ConfirmDialogMetric(
+                          detail: detail,
+                          accentColor: iconColor,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+              if (warningMessage != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: iconColor.withValues(alpha: 0.25),
                     ),
-                    child: Text(confirmLabel),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: iconColor,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          warningMessage!,
+                          style: TextStyle(
+                            color: iconColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF94A3B8),
+                        side: const BorderSide(color: Color(0xFF334155)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        onConfirm();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: confirmColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(confirmLabel),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfirmDialogDetail {
+  const _ConfirmDialogDetail({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+}
+
+class _ConfirmDialogMetric extends StatelessWidget {
+  const _ConfirmDialogMetric({
+    required this.detail,
+    required this.accentColor,
+  });
+
+  final _ConfirmDialogDetail detail;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 106,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF334155)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              detail.label,
+              style: TextStyle(
+                color: accentColor.withValues(alpha: 0.85),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              detail.value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
