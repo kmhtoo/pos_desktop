@@ -45,19 +45,6 @@ void main() async {
     printerManager: printerManager,
   );
   await provider.init();
-  
-  // Auto-assign the printer to receipt role
-  printerManager.assignPrinter(
-    PrinterRole.receipt,
-    const PrinterDevice(
-      id: 'epson-tm-m30',
-      name: 'Epson TM-M30 Series III',
-      connectionType: PrinterConnectionType.tcpIp,
-      address: '192.168.1.156',
-      port: 9100,
-      supportsEscPos: true,
-    ),
-  );
 
   if (_isDesktopPlatform) {
     const windowOptions = WindowOptions(

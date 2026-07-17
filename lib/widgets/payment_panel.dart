@@ -75,6 +75,17 @@ class _PaymentPanelState extends State<PaymentPanel> {
       provider.clearPaymentDrafts();
 
       _showPaymentSuccessToast(txn);
+    } on PaymentCompletionException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _voucherCode = '';
+      });
+      provider.clearPaymentDrafts();
+      _showPaymentSuccessToast(error.transaction);
+      _showPrintWarningToast(error);
+    } catch (error) {
+      if (!mounted) return;
+      _showPaymentFailureToast(error);
     } finally {
       if (mounted && _isProcessing) {
         setState(() => _isProcessing = false);
@@ -91,7 +102,7 @@ class _PaymentPanelState extends State<PaymentPanel> {
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(12),
           backgroundColor: const Color(0xFF065F46),
-          duration: const Duration(seconds: 2),
+          duration: const Duration(seconds: 3),
           content: Row(
             children: [
               const Icon(Icons.check_circle, color: Colors.white),
@@ -113,6 +124,66 @@ class _PaymentPanelState extends State<PaymentPanel> {
           ),
         ),
       );
+  }
+
+  void _showPrintWarningToast(PaymentCompletionException error) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(12),
+        backgroundColor: const Color(0xFFB45309),
+        duration: const Duration(seconds: 4),
+        content: Text(
+          _friendlyPrintWarning(error),
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  void _showPaymentFailureToast(Object error) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(12),
+        backgroundColor: const Color(0xFFB91C1C),
+        duration: const Duration(seconds: 4),
+        content: Text(
+          _friendlyPaymentFailure(error),
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  String _friendlyPrintWarning(PaymentCompletionException error) {
+    final cause = error.cause.toString().toLowerCase();
+    if (cause.contains('printer') || cause.contains('network')) {
+      return 'Payment is completed.\n'
+          'Cause: the receipt printer is not ready.\n'
+          'Try: check printer power, paper, and Wi-Fi, then try printing again.\n'
+          'Tell technician: payment saved, receipt print failed.';
+    }
+    return 'Payment is completed.\n'
+        'Cause: the receipt could not be prepared right now.\n'
+        'Try: wait a moment and try printing again.\n'
+        'Tell technician: payment saved, receipt print failed.';
+  }
+
+  String _friendlyPaymentFailure(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('printer')) {
+      return 'Payment could not be completed.\n'
+          'Cause: the printer was not ready.\n'
+          'Try: check printer power and paper, then try again.\n'
+          'Tell technician: payment stopped because printer was not ready.';
+    }
+    return 'Payment could not be completed.\n'
+        'Cause: something went wrong while saving the order.\n'
+        'Try: check the order and try again.\n'
+        'Tell technician: payment step failed before completion.';
   }
 
   String _cashDenominationLabel(double amount) {

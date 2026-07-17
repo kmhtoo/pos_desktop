@@ -229,5 +229,62 @@ void main() {
       expect(provider.cashTenderedDraft, 1.0);
       expect(provider.cashTenderCountFor(1.0), 1);
     });
+
+    testWidgets('hold save popup stays centered on screen', (tester) async {
+      final provider = await createReadyProvider();
+
+      await tester.pumpWidget(
+        wrapWithProvider(
+          provider,
+          const OrderPanel(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('hold-order-button')));
+      await tester.pumpAndSettle();
+
+      final dialogFinder = find.byKey(const Key('hold-order-dialog'));
+      expect(dialogFinder, findsOneWidget);
+
+      final scaffoldSize = tester.getSize(find.byType(Scaffold));
+      final dialogRect = tester.getRect(dialogFinder);
+      expect(
+        dialogRect.left + (dialogRect.width / 2),
+        closeTo(scaffoldSize.width / 2, 2.0),
+      );
+    });
+
+    testWidgets('saved orders list opens on right with order-panel width', (
+      tester,
+    ) async {
+      final provider = await createReadyProvider();
+
+      await tester.pumpWidget(
+        wrapWithProvider(
+          provider,
+          const OrderPanel(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('hold-order-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('saved-orders-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('hold-order-dialog')), findsNothing);
+      final panelFinder = find.byKey(const Key('saved-orders-panel'));
+      expect(panelFinder, findsOneWidget);
+
+      final scaffoldSize = tester.getSize(find.byType(Scaffold));
+      final panelRect = tester.getRect(panelFinder);
+      expect(panelRect.width, closeTo(scaffoldSize.width / 3, 0.001));
+      expect(panelRect.left, closeTo(scaffoldSize.width - panelRect.width, 0.001));
+    });
+
   });
 }

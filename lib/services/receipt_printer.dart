@@ -328,6 +328,9 @@ class PrinterManager implements ReceiptPrinter {
 
   @override
   Future<void> printReceipt(Transaction transaction) {
+    if (!hasAssignment(PrinterRole.receipt)) {
+      return Future.value();
+    }
     return printEscPos(role: PrinterRole.receipt, transaction: transaction);
   }
 

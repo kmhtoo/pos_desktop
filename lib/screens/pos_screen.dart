@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/pos_provider.dart';
+import 'system_screen.dart';
 import '../widgets/product_panel.dart';
 import '../widgets/order_panel.dart';
 
@@ -7,6 +10,11 @@ class POSScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<PosProvider>();
+    if (!provider.canAccessPos) {
+      return const SystemScreen();
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       body: LayoutBuilder(

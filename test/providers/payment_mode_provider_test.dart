@@ -17,6 +17,13 @@ class _FakeReceiptPrinter implements ReceiptPrinter {
   }
 }
 
+class _FailingReceiptPrinter implements ReceiptPrinter {
+  @override
+  Future<void> printReceipt(Transaction transaction) async {
+    throw Exception('Printer offline');
+  }
+}
+
 class _FakePrinterDriver implements PrinterDriver {
   final List<PrinterDevice> sentDevices = [];
   final List<List<int>> sentBytes = [];
@@ -111,6 +118,96 @@ void main() {
       expect(provider.visibleCashDenominations, isNot(contains(10000.0)));
     });
 
+    test('can park and resume an unfinished order with custom label', () async {
+      final user = AppUser(
+        id: '1001',
+        name: 'Alex Chen',
+        role: 'Cashier',
+        loginTime: DateTime.now(),
+      );
+      provider.setUser(user);
+      await provider.openBusinessDay(user);
+      await provider.openShift(ShiftType.breakfast, user);
+      provider.addToCart(provider.products.first);
+      provider.addToCart(provider.products[1]);
+
+      final parked = await provider.parkCurrentOrder(customLabel: 'Table 3');
+
+      expect(parked, isNotNull);
+      expect(parked!.orderLabel, 'Table 3');
+      expect(provider.cart, isEmpty);
+      expect(provider.suspendedOrders, hasLength(1));
+
+      final resumed = await provider.resumeSuspendedOrder(parked.id);
+
+      expect(resumed, isTrue);
+      expect(provider.suspendedOrders, isEmpty);
+      expect(provider.cart, hasLength(2));
+      expect(provider.cartItemCount, 2);
+    });
+
+    test('parked order uses auto-number label when cashier leaves name blank', () async {
+      final user = AppUser(
+        id: '1001',
+        name: 'Alex Chen',
+        role: 'Cashier',
+        loginTime: DateTime.now(),
+      );
+      provider.setUser(user);
+      await provider.openBusinessDay(user);
+      await provider.openShift(ShiftType.breakfast, user);
+      provider.addToCart(provider.products.first);
+
+      final firstParked = await provider.parkCurrentOrder();
+      expect(firstParked?.orderLabel, 'Saved Order #1');
+
+      provider.addToCart(provider.products.first);
+      final secondParked = await provider.parkCurrentOrder(customLabel: '   ');
+      expect(secondParked?.orderLabel, 'Saved Order #2');
+    });
+
+    test('suspended orders persist across provider reload', () async {
+      final user = AppUser(
+        id: '1001',
+        name: 'Alex Chen',
+        role: 'Cashier',
+        loginTime: DateTime.now(),
+      );
+      provider.setUser(user);
+      await provider.openBusinessDay(user);
+      await provider.openShift(ShiftType.breakfast, user);
+      provider.addToCart(provider.products.first);
+
+      final parked = await provider.parkCurrentOrder();
+      expect(parked, isNotNull);
+
+      final reloaded = PosProvider(repository: PosRepository(database));
+      await reloaded.init();
+
+      expect(reloaded.suspendedOrders, hasLength(1));
+      expect(reloaded.suspendedOrders.single.itemCount, 1);
+      expect(reloaded.suspendedOrders.single.orderLabel, 'Saved Order #1');
+    });
+
+    test('cannot close shift while suspended orders remain', () async {
+      final user = AppUser(
+        id: '1001',
+        name: 'Alex Chen',
+        role: 'Cashier',
+        loginTime: DateTime.now(),
+      );
+      provider.setUser(user);
+      await provider.openBusinessDay(user);
+      await provider.openShift(ShiftType.breakfast, user);
+      provider.addToCart(provider.products.first);
+      await provider.parkCurrentOrder();
+
+      await provider.closeShift(user);
+
+      expect(provider.hasActiveShift, isTrue);
+      expect(provider.currentShift?.isOpen, isTrue);
+    });
+
     test('processPayment sends transaction to receipt printer', () async {
       final printer = _FakeReceiptPrinter();
       final providerWithPrinter = PosProvider(
@@ -136,6 +233,111 @@ void main() {
 
       expect(printer.printedTransactions.length, 1);
       expect(printer.printedTransactions.first.id, txn.id);
+    });
+
+    test(
+      'processPayment still settles order when receipt printing fails',
+      () async {
+        final providerWithPrinterFailure = PosProvider(
+          repository: PosRepository(database),
+          receiptPrinter: _FailingReceiptPrinter(),
+        );
+        final user = AppUser(
+          id: '1001',
+          name: 'Alex Chen',
+          role: 'Cashier',
+          loginTime: DateTime.now(),
+        );
+        providerWithPrinterFailure.setUser(user);
+        await providerWithPrinterFailure.openBusinessDay(user);
+        await providerWithPrinterFailure.openShift(ShiftType.breakfast, user);
+        providerWithPrinterFailure.addToCart(
+          providerWithPrinterFailure.products.first,
+        );
+
+        try {
+          await providerWithPrinterFailure.processPayment(
+            tenderType: TenderType.cash,
+            cashAmount: providerWithPrinterFailure.total + 1.0,
+            cardAmount: 0.0,
+          );
+          fail('Expected PaymentCompletionException');
+        } on PaymentCompletionException catch (error) {
+          expect(error.transaction.change, greaterThan(0));
+          expect(providerWithPrinterFailure.transactions, hasLength(1));
+          expect(providerWithPrinterFailure.cart, isEmpty);
+          expect(providerWithPrinterFailure.cashTenderedDraft, 0.0);
+        }
+      },
+    );
+
+    test(
+      'processPayment completes without printing when receipt printer is not assigned',
+      () async {
+        final driver = _FakePrinterDriver();
+        final providerWithManager = PosProvider(
+          repository: PosRepository(database),
+          printerManager: PrinterManager(
+            discovery: const StaticPrinterDiscovery([]),
+            drivers: [driver],
+          ),
+        );
+        final user = AppUser(
+          id: '1001',
+          name: 'Alex Chen',
+          role: 'Cashier',
+          loginTime: DateTime.now(),
+        );
+        providerWithManager.setUser(user);
+        await providerWithManager.openBusinessDay(user);
+        await providerWithManager.openShift(ShiftType.breakfast, user);
+        providerWithManager.addToCart(providerWithManager.products.first);
+
+        final txn = await providerWithManager.processPayment(
+          tenderType: TenderType.cash,
+          cashAmount: providerWithManager.total,
+          cardAmount: 0.0,
+        );
+
+        expect(txn.total, greaterThan(0));
+        expect(providerWithManager.transactions, hasLength(1));
+        expect(providerWithManager.cart, isEmpty);
+        expect(driver.sentDevices, isEmpty);
+        expect(driver.sentBytes, isEmpty);
+      },
+    );
+
+    test('processPayment uses unique transaction ids across business days', () async {
+      final user = AppUser(
+        id: '1001',
+        name: 'Alex Chen',
+        role: 'Cashier',
+        loginTime: DateTime.now(),
+      );
+      provider.setUser(user);
+
+      await provider.openBusinessDay(user);
+      await provider.openShift(ShiftType.breakfast, user);
+      provider.addToCart(provider.products.first);
+      final firstTxn = await provider.processPayment(
+        tenderType: TenderType.cash,
+        cashAmount: provider.total,
+        cardAmount: 0.0,
+      );
+
+      await provider.closeShift(user);
+      await provider.closeBusinessDay(user);
+
+      await provider.openBusinessDay(user);
+      await provider.openShift(ShiftType.breakfast, user);
+      provider.addToCart(provider.products.first);
+      final secondTxn = await provider.processPayment(
+        tenderType: TenderType.cash,
+        cashAmount: provider.total,
+        cardAmount: 0.0,
+      );
+
+      expect(firstTxn.id, isNot(secondTxn.id));
     });
 
     test('provider discovers assigns and test prints by role', () async {

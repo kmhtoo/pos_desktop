@@ -91,6 +91,19 @@ void main() {
       expect(driver.sentPayloads.single, isNotEmpty);
     });
 
+    test('skips receipt printing when no receipt printer is assigned', () async {
+      final driver = _FakeDriver();
+      final manager = PrinterManager(
+        discovery: const StaticPrinterDiscovery([]),
+        drivers: [driver],
+      );
+
+      await manager.printReceipt(sampleTransaction());
+
+      expect(driver.sentDevices, isEmpty);
+      expect(driver.sentPayloads, isEmpty);
+    });
+
     test('supports printing to different assigned roles', () async {
       final driver = _FakeDriver();
       final receiptPrinter = const PrinterDevice(

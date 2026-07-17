@@ -230,6 +230,7 @@ class _BusinessDayCard extends StatelessWidget {
             'Close the active shift before closing the business day.',
           ),
           backgroundColor: Color(0xFFEF4444),
+          duration: Duration(seconds: 5),
         ),
       );
       return;
@@ -242,6 +243,19 @@ class _BusinessDayCard extends StatelessWidget {
         iconColor: const Color(0xFFEF4444),
         message:
             'The business day will be closed. No further orders can be taken until a new day is opened.',
+        details: [
+          _ConfirmDialogDetail(
+            label: 'Day',
+            value: provider.currentBusinessDay?.id ?? '—',
+          ),
+          _ConfirmDialogDetail(
+            label: 'Shifts Done',
+            value: provider.todayShifts.where((shift) => !shift.isOpen).length
+                .toString(),
+          ),
+        ],
+        warningMessage:
+            'Make sure all takings are reviewed before ending the business day.',
         confirmLabel: 'Close Day',
         confirmColor: const Color(0xFFEF4444),
         onConfirm: () => provider.closeBusinessDay(user),
@@ -261,6 +275,7 @@ class _ShiftCard extends StatelessWidget {
     final hasDay = provider.hasActiveBusinessDay;
     final hasShift = provider.hasActiveShift;
     final available = provider.availableShiftTypes;
+    final suspendedCount = provider.suspendedOrderCount;
 
     if (!hasDay) {
       return Container(
@@ -398,13 +413,42 @@ class _ShiftCard extends StatelessWidget {
             ],
           ],
           if (hasShift) ...[
+            if (suspendedCount > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  '$suspendedCount saved order${suspendedCount == 1 ? '' : 's'} must be resumed or deleted before closing this shift.',
+                  style: const TextStyle(
+                    color: Color(0xFFFCD34D),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () => _confirmCloseShift(context, provider, shift!),
+                onPressed: suspendedCount > 0
+                    ? () => _showSuspendedOrdersBlockMessage(
+                          context,
+                          suspendedCount,
+                        )
+                    : () => _confirmCloseShift(context, provider, shift!),
                 icon: const Icon(Icons.stop_circle_outlined, size: 16),
-                label: const Text('Close Shift'),
+                label: Text(
+                  suspendedCount > 0 ? 'Clear Saved Orders First' : 'Close Shift',
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFEF4444),
                   side: const BorderSide(color: Color(0xFFEF4444)),
@@ -450,6 +494,10 @@ class _ShiftCard extends StatelessWidget {
   ) {
     final user = provider.currentUser;
     if (user == null) return;
+    if (provider.suspendedOrderCount > 0) {
+      _showSuspendedOrdersBlockMessage(context, provider.suspendedOrderCount);
+      return;
+    }
     final count = provider.shiftReceiptCount;
     final total = provider.shiftTotalSales;
     showDialog(
@@ -459,10 +507,35 @@ class _ShiftCard extends StatelessWidget {
         icon: Icons.stop_circle_outlined,
         iconColor: const Color(0xFFEF4444),
         message:
-            '$count receipt${count != 1 ? 's' : ''} · \$${total.toStringAsFixed(2)} total\n\nNo orders can be taken after closing.',
+            'No orders can be taken after closing this shift.',
+        details: [
+          _ConfirmDialogDetail(label: 'Shift', value: shift.name),
+          _ConfirmDialogDetail(
+            label: 'Receipts',
+            value: count.toString(),
+          ),
+          _ConfirmDialogDetail(
+            label: 'Sales',
+            value: '\$${total.toStringAsFixed(2)}',
+          ),
+        ],
+        warningMessage:
+            'Check the final totals carefully before you close the shift.',
         confirmLabel: 'Close Shift',
         confirmColor: const Color(0xFFEF4444),
         onConfirm: () => provider.closeShift(user),
+      ),
+    );
+  }
+
+  void _showSuspendedOrdersBlockMessage(BuildContext context, int count) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFF59E0B),
+        duration: const Duration(seconds: 5),
+        content: Text(
+          'This shift still has $count saved order${count == 1 ? '' : 's'}. Clear them one by one in Current Order > Saved first.',
+        ),
       ),
     );
   }
@@ -706,6 +779,50 @@ class _PrinterSettingsCard extends StatelessWidget {
     return '${device.name} • ${device.address}';
   }
 
+  String _friendlyPrinterError(Object error, {required bool isConnectionTest}) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('operation not permitted') ||
+        message.contains('not permitted')) {
+      return 'Could not reach the printer.\n'
+          'Cause: this device has not allowed printer access yet.\n'
+          'Try: allow Local Network access for this app, then try again.\n'
+          'Tell technician: local network permission blocked.';
+    }
+    if (message.contains('timed out') || message.contains('timeout')) {
+      return isConnectionTest
+          ? 'Could not reach the printer.\n'
+              'Cause: the printer is taking too long to answer.\n'
+              'Try: check printer power, paper, and Wi-Fi, then try again.\n'
+              'Tell technician: printer not responding.'
+          : 'Could not send the test receipt.\n'
+              'Cause: the printer is taking too long to answer.\n'
+              'Try: check printer power, paper, and Wi-Fi, then try again.\n'
+              'Tell technician: printer not responding.';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connect')) {
+      return isConnectionTest
+          ? 'Could not reach the printer.\n'
+              'Cause: the app cannot find the printer on the network.\n'
+              'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
+              'Tell technician: printer connection failed.'
+          : 'Could not send the test receipt.\n'
+              'Cause: the app cannot find the printer on the network.\n'
+              'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
+              'Tell technician: printer connection failed.';
+    }
+    return isConnectionTest
+        ? 'Could not check the printer right now.\n'
+            'Cause: the printer did not answer as expected.\n'
+            'Try: wait a moment and try again.\n'
+            'Tell technician: printer check failed.'
+        : 'Could not print the test receipt right now.\n'
+            'Cause: the printer did not answer as expected.\n'
+            'Try: wait a moment and try again.\n'
+            'Tell technician: test receipt failed.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final messenger = ScaffoldMessenger.of(context);
@@ -903,8 +1020,9 @@ class _PrinterSettingsCard extends StatelessWidget {
                                   provider.testPrinter(role).then((_) {
                                     messenger.showSnackBar(
                                       SnackBar(
+                                        duration: const Duration(seconds: 4),
                                         content: Text(
-                                          '${_roleLabel(role)} printer test sent',
+                                          'Test receipt sent to ${_roleLabel(role)} printer.',
                                         ),
                                       ),
                                     );
@@ -912,8 +1030,12 @@ class _PrinterSettingsCard extends StatelessWidget {
                                     messenger.showSnackBar(
                                       SnackBar(
                                         backgroundColor: const Color(0xFFB91C1C),
+                                        duration: const Duration(seconds: 5),
                                         content: Text(
-                                          'Printer test failed: $error',
+                                          _friendlyPrinterError(
+                                            error,
+                                            isConnectionTest: false,
+                                          ),
                                         ),
                                       ),
                                     );
@@ -939,8 +1061,9 @@ class _PrinterSettingsCard extends StatelessWidget {
                                     messenger.showSnackBar(
                                       SnackBar(
                                         backgroundColor: const Color(0xFF065F46),
+                                        duration: const Duration(seconds: 4),
                                         content: Text(
-                                          '${_roleLabel(role)} printer connection OK',
+                                          '${_roleLabel(role)} printer is ready.',
                                         ),
                                       ),
                                     );
@@ -948,8 +1071,12 @@ class _PrinterSettingsCard extends StatelessWidget {
                                     messenger.showSnackBar(
                                       SnackBar(
                                         backgroundColor: const Color(0xFFB91C1C),
+                                        duration: const Duration(seconds: 5),
                                         content: Text(
-                                          'Connection failed: $error',
+                                          _friendlyPrinterError(
+                                            error,
+                                            isConnectionTest: true,
+                                          ),
                                         ),
                                       ),
                                     );
@@ -1077,6 +1204,8 @@ class _ConfirmDialog extends StatelessWidget {
     required this.confirmLabel,
     required this.confirmColor,
     required this.onConfirm,
+    this.details = const [],
+    this.warningMessage,
   });
 
   final String title;
@@ -1086,81 +1215,257 @@ class _ConfirmDialog extends StatelessWidget {
   final String confirmLabel;
   final Color confirmColor;
   final VoidCallback onConfirm;
+  final List<_ConfirmDialogDetail> details;
+  final String? warningMessage;
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFF334155)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x55000000),
+                blurRadius: 24,
+                offset: Offset(0, 10),
               ),
-              child: Icon(icon, color: iconColor, size: 28),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF94A3B8),
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF94A3B8),
-                      side: const BorderSide(color: Color(0xFF334155)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: iconColor.withValues(alpha: 0.25),
                       ),
                     ),
-                    child: const Text('Cancel'),
+                    child: Icon(icon, color: iconColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: iconColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            confirmLabel,
+                            style: TextStyle(
+                              color: iconColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF334155)),
+                ),
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Color(0xFFCBD5E1),
+                    fontSize: 13,
+                    height: 1.45,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      onConfirm();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: confirmColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+              ),
+              if (details.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: details
+                      .map(
+                        (detail) => _ConfirmDialogMetric(
+                          detail: detail,
+                          accentColor: iconColor,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+              if (warningMessage != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: iconColor.withValues(alpha: 0.25),
                     ),
-                    child: Text(confirmLabel),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: iconColor,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          warningMessage!,
+                          style: TextStyle(
+                            color: iconColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF94A3B8),
+                        side: const BorderSide(color: Color(0xFF334155)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        onConfirm();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: confirmColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(confirmLabel),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfirmDialogDetail {
+  const _ConfirmDialogDetail({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+}
+
+class _ConfirmDialogMetric extends StatelessWidget {
+  const _ConfirmDialogMetric({
+    required this.detail,
+    required this.accentColor,
+  });
+
+  final _ConfirmDialogDetail detail;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 106,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF334155)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              detail.label,
+              style: TextStyle(
+                color: accentColor.withValues(alpha: 0.85),
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              detail.value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

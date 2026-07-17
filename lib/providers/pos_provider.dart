@@ -5,8 +5,22 @@ import '../models/transaction.dart';
 import '../models/user.dart';
 import '../models/business_day.dart';
 import '../models/shift.dart';
+import '../models/suspended_order.dart';
 import '../data/pos_repository.dart';
 import '../services/receipt_printer.dart';
+
+class PaymentCompletionException implements Exception {
+  const PaymentCompletionException({
+    required this.transaction,
+    required this.cause,
+  });
+
+  final Transaction transaction;
+  final Object cause;
+
+  @override
+  String toString() => 'Payment completed, but receipt printing failed: $cause';
+}
 
 class PosProvider extends ChangeNotifier {
   static const double taxRate = 0.10;
@@ -58,6 +72,7 @@ class PosProvider extends ChangeNotifier {
   };
   List<PrinterDevice> _discoveredPrinters = [];
   bool _isDiscoveringPrinters = false;
+  final List<SuspendedOrder> _suspendedOrders = [];
 
   BusinessDay? _currentBusinessDay;
   Shift? _currentShift;
@@ -82,6 +97,13 @@ class PosProvider extends ChangeNotifier {
         _transactions.addAll(txns);
       }
       _transactions.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      if (_currentShift != null) {
+        _suspendedOrders
+          ..clear()
+          ..addAll(
+            await repository.loadSuspendedOrdersForShift(_currentShift!.id),
+          );
+      }
     }
 
     notifyListeners();
@@ -126,6 +148,10 @@ class PosProvider extends ChangeNotifier {
   List<PrinterDevice> get discoveredPrinters =>
       List.unmodifiable(_discoveredPrinters);
   List<PrinterRole> get printerRoles => PrinterRole.values;
+  bool get canAccessPos => hasActiveBusinessDay && hasActiveShift;
+  List<SuspendedOrder> get suspendedOrders => List.unmodifiable(_suspendedOrders);
+  int get suspendedOrderCount => _suspendedOrders.length;
+  bool get hasSuspendedOrders => _suspendedOrders.isNotEmpty;
   PrinterDevice? assignedPrinterForRole(PrinterRole role) =>
       _printerManager?.assignedPrinterFor(role);
   bool isCashDenominationVisible(double denomination) =>
@@ -150,6 +176,7 @@ class PosProvider extends ChangeNotifier {
     _cardTenderedDraft = 0.0;
     _voucherCodeDraft = '';
     _cashDenominationCounts.clear();
+    _suspendedOrders.clear();
     notifyListeners();
   }
 
@@ -244,6 +271,7 @@ class PosProvider extends ChangeNotifier {
     _currentBusinessDay = bd;
     _shifts.clear();
     _transactions.clear();
+    _suspendedOrders.clear();
     _currentShift = null;
     await repository.saveBusinessDay(bd);
     notifyListeners();
@@ -257,6 +285,7 @@ class PosProvider extends ChangeNotifier {
       closedById: by.id,
     );
     _currentBusinessDay = closed;
+    _suspendedOrders.clear();
     await repository.saveBusinessDay(closed);
     notifyListeners();
   }
@@ -290,11 +319,15 @@ class PosProvider extends ChangeNotifier {
     _shifts.add(shift);
     _currentShift = shift;
     await repository.saveShift(shift);
+    _suspendedOrders
+      ..clear()
+      ..addAll(await repository.loadSuspendedOrdersForShift(shift.id));
     notifyListeners();
   }
 
   Future<void> closeShift(AppUser by) async {
     if (!hasActiveShift) return;
+    if (_suspendedOrders.isNotEmpty) return;
     final closed = _currentShift!.close(
       closedByName: by.name,
       closedById: by.id,
@@ -302,6 +335,7 @@ class PosProvider extends ChangeNotifier {
     final idx = _shifts.indexWhere((s) => s.id == closed.id);
     if (idx >= 0) _shifts[idx] = closed;
     _currentShift = closed;
+    _suspendedOrders.clear();
     await repository.saveShift(closed);
     notifyListeners();
   }
@@ -465,11 +499,62 @@ class PosProvider extends ChangeNotifier {
 
   void clearCart() {
     _cart.clear();
-    _cashTenderedDraft = 0.0;
-    _cardTenderedDraft = 0.0;
-    _voucherCodeDraft = '';
-    _cashDenominationCounts.clear();
+    _resetPaymentDrafts();
     notifyListeners();
+  }
+
+  Future<SuspendedOrder?> parkCurrentOrder({String? customLabel}) async {
+    if (_currentShift == null || _cart.isEmpty) return null;
+    final now = DateTime.now();
+    final normalizedLabel = customLabel?.trim() ?? '';
+    final order = SuspendedOrder(
+      id: 'HOLD-${now.microsecondsSinceEpoch}',
+      shiftId: _currentShift!.id,
+      orderLabel: normalizedLabel.isEmpty
+          ? _nextSuspendedOrderLabel()
+          : normalizedLabel,
+      items: _cart
+          .map((item) => CartItem(product: item.product, quantity: item.quantity))
+          .toList(),
+      createdAt: now,
+      updatedAt: now,
+      cashierId: _currentUser?.id,
+      cashierName: _currentUser?.name,
+    );
+    await repository.saveSuspendedOrder(order);
+    _suspendedOrders.insert(0, order);
+    _cart.clear();
+    _resetPaymentDrafts();
+    _showPaymentHistory = false;
+    notifyListeners();
+    return order;
+  }
+
+  Future<bool> resumeSuspendedOrder(String orderId) async {
+    if (_cart.isNotEmpty) return false;
+    final index = _suspendedOrders.indexWhere((order) => order.id == orderId);
+    if (index < 0) return false;
+    final order = _suspendedOrders.removeAt(index);
+    _cart
+      ..clear()
+      ..addAll(
+        order.items
+            .map((item) => CartItem(product: item.product, quantity: item.quantity)),
+      );
+    _resetPaymentDrafts();
+    _showPaymentHistory = false;
+    await repository.deleteSuspendedOrder(order.id);
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> deleteSuspendedOrder(String orderId) async {
+    final index = _suspendedOrders.indexWhere((order) => order.id == orderId);
+    if (index < 0) return false;
+    _suspendedOrders.removeAt(index);
+    await repository.deleteSuspendedOrder(orderId);
+    notifyListeners();
+    return true;
   }
 
   // ── Transactions ──────────────────────────────────────────────────────────────
@@ -499,7 +584,7 @@ class PosProvider extends ChangeNotifier {
     }
 
     final txn = Transaction(
-      id: 'TXN-${(_transactions.length + 1001).toString()}',
+      id: 'TXN-${DateTime.now().microsecondsSinceEpoch}',
       items: _cart
           .map((i) => CartItem(product: i.product, quantity: i.quantity))
           .toList(),
@@ -519,8 +604,35 @@ class PosProvider extends ChangeNotifier {
     _transactions.insert(0, txn);
     await repository.insertTransaction(txn);
     clearCart();
-    await _receiptPrinter.printReceipt(txn);
+    try {
+      await _receiptPrinter.printReceipt(txn);
+    } catch (error) {
+      throw PaymentCompletionException(
+        transaction: txn,
+        cause: error,
+      );
+    }
     return txn;
+  }
+
+  void _resetPaymentDrafts() {
+    _cashTenderedDraft = 0.0;
+    _cardTenderedDraft = 0.0;
+    _voucherCodeDraft = '';
+    _cashDenominationCounts.clear();
+  }
+
+  String _nextSuspendedOrderLabel() {
+    var maxNumber = 0;
+    for (final order in _suspendedOrders) {
+      final match = RegExp(r'^Saved Order #(\d+)$').firstMatch(order.orderLabel);
+      if (match == null) continue;
+      final parsed = int.tryParse(match.group(1) ?? '');
+      if (parsed != null && parsed > maxNumber) {
+        maxNumber = parsed;
+      }
+    }
+    return 'Saved Order #${maxNumber + 1}';
   }
 
   // ── Products ──────────────────────────────────────────────────────────────────
