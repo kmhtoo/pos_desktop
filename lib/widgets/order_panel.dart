@@ -104,14 +104,6 @@ class _OrderHeaderState extends State<_OrderHeader> {
                 foregroundColor: const Color(0xFFF59E0B),
               ),
             ),
-          if (count > 0)
-            TextButton(
-              onPressed: () => context.read<PosProvider>().clearCart(),
-              child: const Text(
-                'Clear',
-                style: TextStyle(color: Color(0xFFEF4444)),
-              ),
-            ),
         ],
       ),
     );
@@ -309,17 +301,11 @@ class _HoldOrderDialogState extends State<_HoldOrderDialog> {
                 ),
                 const SizedBox(width: 4),
                 Expanded(
-                  child: _OnscreenKeyButton(
-                    label: '⌫',
-                    onTap: _backspace,
-                  ),
+                  child: _OnscreenKeyButton(label: '⌫', onTap: _backspace),
                 ),
                 const SizedBox(width: 4),
                 Expanded(
-                  child: _OnscreenKeyButton(
-                    label: 'Clear',
-                    onTap: _clearText,
-                  ),
+                  child: _OnscreenKeyButton(label: 'Clear', onTap: _clearText),
                 ),
               ],
             ),
@@ -356,25 +342,25 @@ class _OnscreenKeyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-        height: 44,
-        child: Material(
-          color: const Color(0xFF0F172A),
+      height: 44,
+      child: Material(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(8),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(8),
-            child: Center(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+          child: Center(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
         ),
+      ),
     );
   }
 }
@@ -445,7 +431,9 @@ class _SuspendedOrdersSheet extends StatelessWidget {
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
+                            color: const Color(
+                              0xFFF59E0B,
+                            ).withValues(alpha: 0.14),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: const Color(
@@ -454,7 +442,7 @@ class _SuspendedOrdersSheet extends StatelessWidget {
                             ),
                           ),
                           child: const Text(
-                            'Hold or clear the current order before opening a saved one.',
+                            'Hold the current order before opening a saved one.',
                             style: TextStyle(
                               color: Color(0xFFFCD34D),
                               fontSize: 12,
@@ -479,7 +467,8 @@ class _SuspendedOrdersSheet extends StatelessWidget {
                         Expanded(
                           child: ListView.separated(
                             itemCount: orders.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 10),
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 10),
                             itemBuilder: (context, index) {
                               final order = orders[index];
                               return _SuspendedOrderTile(
@@ -596,7 +585,9 @@ class _SuspendedOrderTile extends StatelessWidget {
                               behavior: SnackBarBehavior.floating,
                               margin: EdgeInsets.all(12),
                               duration: Duration(seconds: 3),
-                              content: Text('Saved order loaded back into Current Order.'),
+                              content: Text(
+                                'Saved order loaded back into Current Order.',
+                              ),
                             ),
                           );
                         }
@@ -909,7 +900,8 @@ class _OrderFooter extends StatelessWidget {
               ),
             ],
           ),
-          if (selectedTender == TenderType.cash && cashTenderLines.isNotEmpty) ...[
+          if (selectedTender == TenderType.cash &&
+              cashTenderLines.isNotEmpty) ...[
             const SizedBox(height: 8),
             ...cashTenderLines.map(
               (line) => Padding(
@@ -917,10 +909,9 @@ class _OrderFooter extends StatelessWidget {
                 child: _CashTenderRow(
                   label: '${_cashDenominationLabel(line.key)} x ${line.value}',
                   amount: line.key * line.value,
-                  onRemove: () =>
-                      context.read<PosProvider>().removeCashDenominationDraft(
-                        line.key,
-                      ),
+                  onRemove: () => context
+                      .read<PosProvider>()
+                      .removeCashDenominationDraft(line.key),
                   removeKey: Key('remove-tender-${line.key}'),
                 ),
               ),

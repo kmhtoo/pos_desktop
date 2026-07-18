@@ -250,7 +250,9 @@ class _BusinessDayCard extends StatelessWidget {
           ),
           _ConfirmDialogDetail(
             label: 'Shifts Done',
-            value: provider.todayShifts.where((shift) => !shift.isOpen).length
+            value: provider.todayShifts
+                .where((shift) => !shift.isOpen)
+                .length
                 .toString(),
           ),
         ],
@@ -441,13 +443,15 @@ class _ShiftCard extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: suspendedCount > 0
                     ? () => _showSuspendedOrdersBlockMessage(
-                          context,
-                          suspendedCount,
-                        )
+                        context,
+                        suspendedCount,
+                      )
                     : () => _confirmCloseShift(context, provider, shift!),
                 icon: const Icon(Icons.stop_circle_outlined, size: 16),
                 label: Text(
-                  suspendedCount > 0 ? 'Clear Saved Orders First' : 'Close Shift',
+                  suspendedCount > 0
+                      ? 'Clear Saved Orders First'
+                      : 'Close Shift',
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFEF4444),
@@ -506,14 +510,10 @@ class _ShiftCard extends StatelessWidget {
         title: 'Close ${provider.currentShift!.name} Shift?',
         icon: Icons.stop_circle_outlined,
         iconColor: const Color(0xFFEF4444),
-        message:
-            'No orders can be taken after closing this shift.',
+        message: 'No orders can be taken after closing this shift.',
         details: [
           _ConfirmDialogDetail(label: 'Shift', value: shift.name),
-          _ConfirmDialogDetail(
-            label: 'Receipts',
-            value: count.toString(),
-          ),
+          _ConfirmDialogDetail(label: 'Receipts', value: count.toString()),
           _ConfirmDialogDetail(
             label: 'Sales',
             value: '\$${total.toStringAsFixed(2)}',
@@ -651,11 +651,14 @@ class _AppSettingsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...PosProvider.supportedCashDenominations.asMap().entries.map((entry) {
+          ...PosProvider.supportedCashDenominations.asMap().entries.map((
+            entry,
+          ) {
             final denomination = entry.value;
             return Padding(
               padding: EdgeInsets.only(
-                bottom: entry.key ==
+                bottom:
+                    entry.key ==
                         PosProvider.supportedCashDenominations.length - 1
                     ? 0
                     : 8,
@@ -726,7 +729,9 @@ class _CashDenominationSettingTile extends StatelessWidget {
               Switch(
                 value: isVisible,
                 activeThumbColor: const Color(0xFF14B8A6),
-                activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                activeTrackColor: const Color(
+                  0xFF14B8A6,
+                ).withValues(alpha: 0.4),
                 onChanged: onVisibleChanged,
               ),
               const SizedBox(width: 12),
@@ -738,7 +743,9 @@ class _CashDenominationSettingTile extends StatelessWidget {
               Switch(
                 value: isEnabled,
                 activeThumbColor: const Color(0xFF14B8A6),
-                activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                activeTrackColor: const Color(
+                  0xFF14B8A6,
+                ).withValues(alpha: 0.4),
                 onChanged: onEnabledChanged,
               ),
             ],
@@ -781,6 +788,29 @@ class _PrinterSettingsCard extends StatelessWidget {
 
   String _friendlyPrinterError(Object error, {required bool isConnectionTest}) {
     final message = error.toString().toLowerCase();
+    if (message.contains('out of paper') ||
+        message.contains('paper is near end')) {
+      return isConnectionTest
+          ? 'Printer is connected but not ready.\n'
+                'Cause: paper roll issue detected.\n'
+                'Try: load a new paper roll and close the cover firmly.\n'
+                'Tell technician: paper sensor reported not ready.'
+          : 'Could not send the test receipt.\n'
+                'Cause: paper roll issue detected.\n'
+                'Try: load a new paper roll and close the cover firmly.\n'
+                'Tell technician: paper sensor reported not ready.';
+    }
+    if (message.contains('cutter') || message.contains('hardware error')) {
+      return isConnectionTest
+          ? 'Printer is connected but not ready.\n'
+                'Cause: printer hardware error detected.\n'
+                'Try: power cycle the printer and check cutter/cover status.\n'
+                'Tell technician: printer reported hardware error.'
+          : 'Could not send the test receipt.\n'
+                'Cause: printer hardware error detected.\n'
+                'Try: power cycle the printer and check cutter/cover status.\n'
+                'Tell technician: printer reported hardware error.';
+    }
     if (message.contains('operation not permitted') ||
         message.contains('not permitted')) {
       return 'Could not reach the printer.\n'
@@ -791,36 +821,36 @@ class _PrinterSettingsCard extends StatelessWidget {
     if (message.contains('timed out') || message.contains('timeout')) {
       return isConnectionTest
           ? 'Could not reach the printer.\n'
-              'Cause: the printer is taking too long to answer.\n'
-              'Try: check printer power, paper, and Wi-Fi, then try again.\n'
-              'Tell technician: printer not responding.'
+                'Cause: the printer is taking too long to answer.\n'
+                'Try: check printer power, paper, and Wi-Fi, then try again.\n'
+                'Tell technician: printer not responding.'
           : 'Could not send the test receipt.\n'
-              'Cause: the printer is taking too long to answer.\n'
-              'Try: check printer power, paper, and Wi-Fi, then try again.\n'
-              'Tell technician: printer not responding.';
+                'Cause: the printer is taking too long to answer.\n'
+                'Try: check printer power, paper, and Wi-Fi, then try again.\n'
+                'Tell technician: printer not responding.';
     }
     if (message.contains('network') ||
         message.contains('socket') ||
         message.contains('connect')) {
       return isConnectionTest
           ? 'Could not reach the printer.\n'
-              'Cause: the app cannot find the printer on the network.\n'
-              'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
-              'Tell technician: printer connection failed.'
+                'Cause: the app cannot find the printer on the network.\n'
+                'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
+                'Tell technician: printer connection failed.'
           : 'Could not send the test receipt.\n'
-              'Cause: the app cannot find the printer on the network.\n'
-              'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
-              'Tell technician: printer connection failed.';
+                'Cause: the app cannot find the printer on the network.\n'
+                'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
+                'Tell technician: printer connection failed.';
     }
     return isConnectionTest
         ? 'Could not check the printer right now.\n'
-            'Cause: the printer did not answer as expected.\n'
-            'Try: wait a moment and try again.\n'
-            'Tell technician: printer check failed.'
+              'Cause: the printer did not answer as expected.\n'
+              'Try: wait a moment and try again.\n'
+              'Tell technician: printer check failed.'
         : 'Could not print the test receipt right now.\n'
-            'Cause: the printer did not answer as expected.\n'
-            'Try: wait a moment and try again.\n'
-            'Tell technician: test receipt failed.';
+              'Cause: the printer did not answer as expected.\n'
+              'Try: wait a moment and try again.\n'
+              'Tell technician: test receipt failed.';
   }
 
   @override
@@ -891,6 +921,54 @@ class _PrinterSettingsCard extends StatelessWidget {
             'Tap Test Connection to allow local network access for printer setup.',
             style: TextStyle(color: Color(0xFF64748B), fontSize: 10),
           ),
+          if (provider.hasPrinterManager) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Receipt Health Check Before Settle',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'When off, settlement skips pre-print status check for faster checkout.',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Switch(
+                    value: provider.receiptPrinterHealthCheckEnabled,
+                    activeThumbColor: const Color(0xFF14B8A6),
+                    activeTrackColor: const Color(
+                      0xFF14B8A6,
+                    ).withValues(alpha: 0.4),
+                    onChanged: provider.setReceiptPrinterHealthCheckEnabled,
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           ...provider.printerRoles.map((role) {
             final assigned = provider.assignedPrinterForRole(role);
@@ -929,7 +1007,11 @@ class _PrinterSettingsCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String?>(
-                      initialValue: assigned != null && provider.discoveredPrinters.any((p) => p.id == assigned.id)
+                      initialValue:
+                          assigned != null &&
+                              provider.discoveredPrinters.any(
+                                (p) => p.id == assigned.id,
+                              )
                           ? assigned.id
                           : null,
                       dropdownColor: const Color(0xFF1E293B),
@@ -970,7 +1052,10 @@ class _PrinterSettingsCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (assigned != null && !provider.discoveredPrinters.any((p) => p.id == assigned.id))
+                        if (assigned != null &&
+                            !provider.discoveredPrinters.any(
+                              (p) => p.id == assigned.id,
+                            ))
                           DropdownMenuItem<String?>(
                             value: assigned.id,
                             child: Text(
@@ -986,7 +1071,8 @@ class _PrinterSettingsCard extends StatelessWidget {
                                 return;
                               }
                               PrinterDevice? device;
-                              for (final printer in provider.discoveredPrinters) {
+                              for (final printer
+                                  in provider.discoveredPrinters) {
                                 if (printer.id == value) {
                                   device = printer;
                                   break;
@@ -1014,32 +1100,42 @@ class _PrinterSettingsCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton(
-                          onPressed: assigned == null || !provider.hasPrinterManager
+                          onPressed:
+                              assigned == null || !provider.hasPrinterManager
                               ? null
                               : () {
-                                  provider.testPrinter(role).then((_) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        duration: const Duration(seconds: 4),
-                                        content: Text(
-                                          'Test receipt sent to ${_roleLabel(role)} printer.',
-                                        ),
-                                      ),
-                                    );
-                                  }).catchError((error) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: const Color(0xFFB91C1C),
-                                        duration: const Duration(seconds: 5),
-                                        content: Text(
-                                          _friendlyPrinterError(
-                                            error,
-                                            isConnectionTest: false,
+                                  provider
+                                      .testPrinter(role)
+                                      .then((_) {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            duration: const Duration(
+                                              seconds: 4,
+                                            ),
+                                            content: Text(
+                                              'Test receipt sent to ${_roleLabel(role)} printer.',
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    );
-                                  });
+                                        );
+                                      })
+                                      .catchError((error) {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: const Color(
+                                              0xFFB91C1C,
+                                            ),
+                                            duration: const Duration(
+                                              seconds: 5,
+                                            ),
+                                            content: Text(
+                                              _friendlyPrinterError(
+                                                error,
+                                                isConnectionTest: false,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      });
                                 },
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF14B8A6),
@@ -1054,33 +1150,45 @@ class _PrinterSettingsCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton(
-                          onPressed: assigned == null || !provider.hasPrinterManager
+                          onPressed:
+                              assigned == null || !provider.hasPrinterManager
                               ? null
                               : () {
-                                  provider.testPrinterConnection(role).then((_) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: const Color(0xFF065F46),
-                                        duration: const Duration(seconds: 4),
-                                        content: Text(
-                                          '${_roleLabel(role)} printer is ready.',
-                                        ),
-                                      ),
-                                    );
-                                  }).catchError((error) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: const Color(0xFFB91C1C),
-                                        duration: const Duration(seconds: 5),
-                                        content: Text(
-                                          _friendlyPrinterError(
-                                            error,
-                                            isConnectionTest: true,
+                                  provider
+                                      .testPrinterConnection(role)
+                                      .then((_) {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: const Color(
+                                              0xFF065F46,
+                                            ),
+                                            duration: const Duration(
+                                              seconds: 4,
+                                            ),
+                                            content: Text(
+                                              '${_roleLabel(role)} printer is ready.',
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    );
-                                  });
+                                        );
+                                      })
+                                      .catchError((error) {
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: const Color(
+                                              0xFFB91C1C,
+                                            ),
+                                            duration: const Duration(
+                                              seconds: 5,
+                                            ),
+                                            content: Text(
+                                              _friendlyPrinterError(
+                                                error,
+                                                isConnectionTest: true,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      });
                                 },
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF38BDF8),
@@ -1416,20 +1524,14 @@ class _ConfirmDialog extends StatelessWidget {
 }
 
 class _ConfirmDialogDetail {
-  const _ConfirmDialogDetail({
-    required this.label,
-    required this.value,
-  });
+  const _ConfirmDialogDetail({required this.label, required this.value});
 
   final String label;
   final String value;
 }
 
 class _ConfirmDialogMetric extends StatelessWidget {
-  const _ConfirmDialogMetric({
-    required this.detail,
-    required this.accentColor,
-  });
+  const _ConfirmDialogMetric({required this.detail, required this.accentColor});
 
   final _ConfirmDialogDetail detail;
   final Color accentColor;

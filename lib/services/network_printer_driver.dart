@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'receipt_printer.dart';
 
@@ -10,6 +11,8 @@ class NetworkPrinterDriver implements PrinterDriver {
 
   final Duration connectionTimeout;
   final Duration receiveTimeout;
+  static const int _dle = 0x10;
+  static const int _eot = 0x04;
 
   @override
   bool canHandle(PrinterDevice device) =>
@@ -36,6 +39,67 @@ class NetworkPrinterDriver implements PrinterDriver {
   Future<void> testConnection(PrinterDevice device) async {
     final socket = await _connect(device);
     await socket.close();
+    await _assertPrinterHealth(device);
+  }
+
+  Future<void> _assertPrinterHealth(PrinterDevice device) async {
+    final errorStatus = await _readRealtimeStatus(
+      device: device,
+      statusCode: 3,
+      statusName: 'error',
+    );
+    if ((errorStatus & 0x08) != 0) {
+      throw PrinterException(
+        'Printer error detected: cutter or hardware error.',
+      );
+    }
+    if ((errorStatus & 0x40) != 0) {
+      throw PrinterException(
+        'Printer error detected: unrecoverable hardware error.',
+      );
+    }
+
+    final paperStatus = await _readRealtimeStatus(
+      device: device,
+      statusCode: 4,
+      statusName: 'paper',
+    );
+    if ((paperStatus & 0x40) != 0) {
+      throw PrinterException('Printer is out of paper.');
+    }
+    if ((paperStatus & 0x20) != 0) {
+      throw PrinterException('Printer paper is near end.');
+    }
+  }
+
+  Future<int> _readRealtimeStatus({
+    required PrinterDevice device,
+    required int statusCode,
+    required String statusName,
+  }) async {
+    final socket = await _connect(device);
+    try {
+      socket.add([_dle, _eot, statusCode]);
+      await socket.flush();
+      final response = await socket.first.timeout(receiveTimeout);
+      if (response.isEmpty) {
+        throw PrinterException(
+          'Printer returned empty $statusName status response.',
+        );
+      }
+      return response.first;
+    } on TimeoutException {
+      throw PrinterException(
+        'Timed out while reading $statusName status from printer.',
+      );
+    } catch (e) {
+      if (e is PrinterException) rethrow;
+      throw PrinterException(
+        'Failed to read $statusName status from printer: $e',
+      );
+    } finally {
+      await socket.close();
+    }
   }
 
   Future<Socket> _connect(PrinterDevice device) async {
@@ -73,9 +137,7 @@ class PrinterException implements Exception {
 
 /// Network printer discovery using broadcast (optional enhancement)
 class NetworkPrinterDiscovery implements PrinterDiscovery {
-  NetworkPrinterDiscovery({
-    this.timeout = const Duration(seconds: 3),
-  });
+  NetworkPrinterDiscovery({this.timeout = const Duration(seconds: 3)});
 
   final Duration timeout;
 
@@ -102,7 +164,7 @@ class NetworkPrinterDiscovery implements PrinterDiscovery {
         timeout: const Duration(seconds: 5),
       );
       await socket.close();
-      
+
       return PrinterDevice(
         id: id,
         name: name,

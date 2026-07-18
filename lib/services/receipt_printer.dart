@@ -64,10 +64,7 @@ class NoOpPrinterDriver implements PrinterDriver {
 
 abstract class EscPosEncoder {
   List<int> buildReceipt(Transaction transaction);
-  List<int> buildTestTicket({
-    String title,
-    String message,
-  });
+  List<int> buildTestTicket({String title, String message});
 }
 
 class BasicEscPosEncoder implements EscPosEncoder {
@@ -138,24 +135,18 @@ class BasicEscPosEncoder implements EscPosEncoder {
     bytes.addAll(_newLine());
 
     // Subtotal
-    bytes.addAll(
-      _formatTotalLine('Subtotal', transaction.subtotal).codeUnits,
-    );
+    bytes.addAll(_formatTotalLine('Subtotal', transaction.subtotal).codeUnits);
     bytes.addAll(_newLine());
 
     // Tax
     if (transaction.tax > 0) {
-      bytes.addAll(
-        _formatTotalLine('Tax', transaction.tax).codeUnits,
-      );
+      bytes.addAll(_formatTotalLine('Tax', transaction.tax).codeUnits);
       bytes.addAll(_newLine());
     }
 
     // Total
     bytes.addAll(_fontSize(1)); // Bold
-    bytes.addAll(
-      _formatTotalLine('TOTAL', transaction.total).codeUnits,
-    );
+    bytes.addAll(_formatTotalLine('TOTAL', transaction.total).codeUnits);
     bytes.addAll(_resetFont());
     bytes.addAll(_newLine());
 
@@ -163,18 +154,16 @@ class BasicEscPosEncoder implements EscPosEncoder {
     bytes.addAll(_newLine());
     bytes.addAll(_drawLine());
     bytes.addAll(_newLine());
-    bytes.addAll(
-      'Payment: ${transaction.tenderType.label}'.codeUnits,
-    );
+    bytes.addAll('Payment: ${transaction.tenderType.label}'.codeUnits);
     bytes.addAll(_newLine());
     bytes.addAll(
-      'Amount: \$${transaction.cashAmount > 0 ? transaction.cashAmount : transaction.cardAmount}'.codeUnits,
+      'Amount: \$${transaction.cashAmount > 0 ? transaction.cashAmount : transaction.cardAmount}'
+          .codeUnits,
     );
     bytes.addAll(_newLine());
 
     // Change (if cash)
-    if (transaction.tenderType == TenderType.cash &&
-        transaction.change > 0) {
+    if (transaction.tenderType == TenderType.cash && transaction.change > 0) {
       bytes.addAll(_fontSize(1)); // Bold
       bytes.addAll(
         'Change: \$${transaction.change.toStringAsFixed(2)}'.codeUnits,
@@ -264,7 +253,8 @@ class BasicEscPosEncoder implements EscPosEncoder {
   }
 
   List<int> _formatDateTime(DateTime dt) {
-    final str = 'Date: ${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    final str =
+        'Date: ${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     return str.codeUnits;
   }
 
@@ -282,9 +272,7 @@ class BasicEscPosEncoder implements EscPosEncoder {
     final qtyStr = quantity.toString();
     final priceStr = '\$${total.toStringAsFixed(2)}';
     final nameDisplay = name.length > 20 ? '${name.substring(0, 17)}...' : name;
-    return nameDisplay.padRight(20) +
-        qtyStr.padLeft(4) +
-        priceStr.padLeft(12);
+    return nameDisplay.padRight(20) + qtyStr.padLeft(4) + priceStr.padLeft(12);
   }
 
   String _formatTotalLine(String label, double amount) {
@@ -308,6 +296,7 @@ class PrinterManager implements ReceiptPrinter {
   final List<PrinterDriver> drivers;
   final EscPosEncoder _escPosEncoder;
   final Map<PrinterRole, PrinterDevice> _assignments = {};
+  bool _receiptHealthCheckEnabled = true;
 
   Future<List<PrinterDevice>> discoverAvailablePrinters() {
     return discovery.discoverPrinters();
@@ -325,13 +314,21 @@ class PrinterManager implements ReceiptPrinter {
   Map<PrinterRole, PrinterDevice> get assignments =>
       Map.unmodifiable(_assignments);
   bool hasAssignment(PrinterRole role) => _assignments.containsKey(role);
+  bool get receiptHealthCheckEnabled => _receiptHealthCheckEnabled;
+
+  void setReceiptHealthCheckEnabled(bool enabled) {
+    _receiptHealthCheckEnabled = enabled;
+  }
 
   @override
-  Future<void> printReceipt(Transaction transaction) {
+  Future<void> printReceipt(Transaction transaction) async {
     if (!hasAssignment(PrinterRole.receipt)) {
-      return Future.value();
+      return;
     }
-    return printEscPos(role: PrinterRole.receipt, transaction: transaction);
+    if (_receiptHealthCheckEnabled) {
+      await testConnection(role: PrinterRole.receipt);
+    }
+    await printEscPos(role: PrinterRole.receipt, transaction: transaction);
   }
 
   Future<void> printEscPos({
@@ -343,7 +340,9 @@ class PrinterManager implements ReceiptPrinter {
       throw StateError('No printer assigned for role: $role');
     }
     if (!device.supportsEscPos) {
-      throw StateError('Assigned printer does not support ESC/POS: ${device.id}');
+      throw StateError(
+        'Assigned printer does not support ESC/POS: ${device.id}',
+      );
     }
     final driver = drivers.cast<PrinterDriver?>().firstWhere(
       (d) => d != null && d.canHandle(device),
@@ -366,7 +365,9 @@ class PrinterManager implements ReceiptPrinter {
       throw StateError('No printer assigned for role: $role');
     }
     if (!device.supportsEscPos) {
-      throw StateError('Assigned printer does not support ESC/POS: ${device.id}');
+      throw StateError(
+        'Assigned printer does not support ESC/POS: ${device.id}',
+      );
     }
     final driver = drivers.cast<PrinterDriver?>().firstWhere(
       (d) => d != null && d.canHandle(device),
@@ -400,9 +401,7 @@ class PrinterManager implements ReceiptPrinter {
     await driver.sendBytes(device, bytes);
   }
 
-  Future<void> testConnection({
-    required PrinterRole role,
-  }) async {
+  Future<void> testConnection({required PrinterRole role}) async {
     final device = _assignments[role];
     if (device == null) {
       throw StateError('No printer assigned for role: $role');

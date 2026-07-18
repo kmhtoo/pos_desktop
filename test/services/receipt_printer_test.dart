@@ -8,6 +8,7 @@ import 'package:flutter_pos_desktop/services/receipt_printer.dart';
 class _FakeDriver implements PrinterDriver {
   final List<List<int>> sentPayloads = [];
   final List<PrinterDevice> sentDevices = [];
+  final List<PrinterDevice> testedDevices = [];
 
   @override
   bool canHandle(PrinterDevice device) => true;
@@ -20,7 +21,7 @@ class _FakeDriver implements PrinterDriver {
 
   @override
   Future<void> testConnection(PrinterDevice device) async {
-    sentDevices.add(device);
+    testedDevices.add(device);
   }
 }
 
@@ -87,22 +88,49 @@ void main() {
 
       await manager.printReceipt(sampleTransaction());
 
+      expect(driver.testedDevices.single.id, printer.id);
       expect(driver.sentDevices.single.id, printer.id);
       expect(driver.sentPayloads.single, isNotEmpty);
     });
 
-    test('skips receipt printing when no receipt printer is assigned', () async {
+    test('can skip receipt health check when disabled', () async {
       final driver = _FakeDriver();
+      final printer = const PrinterDevice(
+        id: 'tcp-no-health',
+        name: 'Receipt Printer',
+        connectionType: PrinterConnectionType.tcpIp,
+        address: '192.168.1.55',
+        port: 9100,
+      );
       final manager = PrinterManager(
         discovery: const StaticPrinterDiscovery([]),
         drivers: [driver],
       );
+      manager.assignPrinter(PrinterRole.receipt, printer);
+      manager.setReceiptHealthCheckEnabled(false);
 
       await manager.printReceipt(sampleTransaction());
 
-      expect(driver.sentDevices, isEmpty);
-      expect(driver.sentPayloads, isEmpty);
+      expect(driver.testedDevices, isEmpty);
+      expect(driver.sentDevices.single.id, printer.id);
+      expect(driver.sentPayloads.single, isNotEmpty);
     });
+
+    test(
+      'skips receipt printing when no receipt printer is assigned',
+      () async {
+        final driver = _FakeDriver();
+        final manager = PrinterManager(
+          discovery: const StaticPrinterDiscovery([]),
+          drivers: [driver],
+        );
+
+        await manager.printReceipt(sampleTransaction());
+
+        expect(driver.sentDevices, isEmpty);
+        expect(driver.sentPayloads, isEmpty);
+      },
+    );
 
     test('supports printing to different assigned roles', () async {
       final driver = _FakeDriver();
@@ -129,6 +157,7 @@ void main() {
       await manager.printReceipt(sampleTransaction());
       await manager.printRaw(role: PrinterRole.kitchen, bytes: [1, 2, 3]);
 
+      expect(driver.testedDevices.single.id, receiptPrinter.id);
       expect(driver.sentDevices.first.id, receiptPrinter.id);
       expect(driver.sentDevices.last.id, kitchenPrinter.id);
     });
@@ -150,7 +179,8 @@ void main() {
 
       await manager.testConnection(role: PrinterRole.receipt);
 
-      expect(driver.sentDevices.single.id, printer.id);
+      expect(driver.testedDevices.single.id, printer.id);
+      expect(driver.sentDevices, isEmpty);
       expect(driver.sentPayloads, isEmpty);
     });
 

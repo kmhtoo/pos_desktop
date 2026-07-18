@@ -9,19 +9,6 @@ import '../models/suspended_order.dart';
 import '../data/pos_repository.dart';
 import '../services/receipt_printer.dart';
 
-class PaymentCompletionException implements Exception {
-  const PaymentCompletionException({
-    required this.transaction,
-    required this.cause,
-  });
-
-  final Transaction transaction;
-  final Object cause;
-
-  @override
-  String toString() => 'Payment completed, but receipt printing failed: $cause';
-}
-
 class PosProvider extends ChangeNotifier {
   static const double taxRate = 0.10;
   static const List<double> supportedCashDenominations = [
@@ -84,9 +71,7 @@ class PosProvider extends ChangeNotifier {
     _currentBusinessDay = await repository.loadActiveBusinessDay();
 
     if (_currentBusinessDay != null) {
-      final shifts = await repository.loadShiftsForDay(
-        _currentBusinessDay!.id,
-      );
+      final shifts = await repository.loadShiftsForDay(_currentBusinessDay!.id);
       _shifts
         ..clear()
         ..addAll(shifts);
@@ -122,12 +107,14 @@ class PosProvider extends ChangeNotifier {
   double get cardTenderedDraft => _cardTenderedDraft;
   String get voucherCodeDraft => _voucherCodeDraft;
   List<MapEntry<double, int>> get cashTenderLinesDraft {
-    final lines = _cashDenominationCounts.entries
-        .where((entry) => entry.value > 0)
-        .toList()
-      ..sort((a, b) => b.key.compareTo(a.key));
+    final lines =
+        _cashDenominationCounts.entries
+            .where((entry) => entry.value > 0)
+            .toList()
+          ..sort((a, b) => b.key.compareTo(a.key));
     return List.unmodifiable(lines);
   }
+
   int cashTenderCountFor(double denomination) =>
       _cashDenominationCounts[denomination] ?? 0;
   double get tenderedAmountDraft => switch (_selectedPaymentMode) {
@@ -144,12 +131,15 @@ class PosProvider extends ChangeNotifier {
   bool get useAnimatedPageTransitions => _useAnimatedPageTransitions;
   bool get oneTapPaymentEnabled => _oneTapPaymentEnabled;
   bool get hasPrinterManager => _printerManager != null;
+  bool get receiptPrinterHealthCheckEnabled =>
+      _printerManager?.receiptHealthCheckEnabled ?? false;
   bool get isDiscoveringPrinters => _isDiscoveringPrinters;
   List<PrinterDevice> get discoveredPrinters =>
       List.unmodifiable(_discoveredPrinters);
   List<PrinterRole> get printerRoles => PrinterRole.values;
   bool get canAccessPos => hasActiveBusinessDay && hasActiveShift;
-  List<SuspendedOrder> get suspendedOrders => List.unmodifiable(_suspendedOrders);
+  List<SuspendedOrder> get suspendedOrders =>
+      List.unmodifiable(_suspendedOrders);
   int get suspendedOrderCount => _suspendedOrders.length;
   bool get hasSuspendedOrders => _suspendedOrders.isNotEmpty;
   PrinterDevice? assignedPrinterForRole(PrinterRole role) =>
@@ -217,6 +207,13 @@ class PosProvider extends ChangeNotifier {
   void unassignPrinterRole(PrinterRole role) {
     if (_printerManager == null) return;
     _printerManager.unassignPrinter(role);
+    notifyListeners();
+  }
+
+  void setReceiptPrinterHealthCheckEnabled(bool enabled) {
+    if (_printerManager == null) return;
+    if (_printerManager.receiptHealthCheckEnabled == enabled) return;
+    _printerManager.setReceiptHealthCheckEnabled(enabled);
     notifyListeners();
   }
 
@@ -445,7 +442,9 @@ class PosProvider extends ChangeNotifier {
     } else {
       _cashDenominationCounts[denomination] = currentCount - 1;
     }
-    _cashTenderedDraft = _asMoney((_cashTenderedDraft - denomination).clamp(0.0, double.infinity));
+    _cashTenderedDraft = _asMoney(
+      (_cashTenderedDraft - denomination).clamp(0.0, double.infinity),
+    );
     notifyListeners();
   }
 
@@ -514,7 +513,9 @@ class PosProvider extends ChangeNotifier {
           ? _nextSuspendedOrderLabel()
           : normalizedLabel,
       items: _cart
-          .map((item) => CartItem(product: item.product, quantity: item.quantity))
+          .map(
+            (item) => CartItem(product: item.product, quantity: item.quantity),
+          )
           .toList(),
       createdAt: now,
       updatedAt: now,
@@ -538,8 +539,9 @@ class PosProvider extends ChangeNotifier {
     _cart
       ..clear()
       ..addAll(
-        order.items
-            .map((item) => CartItem(product: item.product, quantity: item.quantity)),
+        order.items.map(
+          (item) => CartItem(product: item.product, quantity: item.quantity),
+        ),
       );
     _resetPaymentDrafts();
     _showPaymentHistory = false;
@@ -601,17 +603,10 @@ class PosProvider extends ChangeNotifier {
       cashierName: _currentUser?.name,
     );
 
+    await _receiptPrinter.printReceipt(txn);
     _transactions.insert(0, txn);
     await repository.insertTransaction(txn);
     clearCart();
-    try {
-      await _receiptPrinter.printReceipt(txn);
-    } catch (error) {
-      throw PaymentCompletionException(
-        transaction: txn,
-        cause: error,
-      );
-    }
     return txn;
   }
 
@@ -625,7 +620,9 @@ class PosProvider extends ChangeNotifier {
   String _nextSuspendedOrderLabel() {
     var maxNumber = 0;
     for (final order in _suspendedOrders) {
-      final match = RegExp(r'^Saved Order #(\d+)$').firstMatch(order.orderLabel);
+      final match = RegExp(
+        r'^Saved Order #(\d+)$',
+      ).firstMatch(order.orderLabel);
       if (match == null) continue;
       final parsed = int.tryParse(match.group(1) ?? '');
       if (parsed != null && parsed > maxNumber) {
@@ -840,6 +837,5 @@ class PosProvider extends ChangeNotifier {
     ),
   ];
 
-  static double _asMoney(double value) =>
-      (value * 100).roundToDouble() / 100.0;
+  static double _asMoney(double value) => (value * 100).roundToDouble() / 100.0;
 }

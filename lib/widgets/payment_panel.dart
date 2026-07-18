@@ -18,8 +18,12 @@ class _PaymentPanelState extends State<PaymentPanel> {
     provider.setVoucherCodeDraft(_voucherCode.trim());
   }
 
-  Future<void> _onCashDenominationTap(PosProvider provider, double amount) async {
-    if (_isProcessing || provider.cartIsEmpty || !provider.hasActiveShift) return;
+  Future<void> _onCashDenominationTap(
+    PosProvider provider,
+    double amount,
+  ) async {
+    if (_isProcessing || provider.cartIsEmpty || !provider.hasActiveShift)
+      return;
     provider.addCashDenominationDraft(amount);
     if (provider.amountDueDraft > 0) return;
     await _processPayment(
@@ -75,14 +79,6 @@ class _PaymentPanelState extends State<PaymentPanel> {
       provider.clearPaymentDrafts();
 
       _showPaymentSuccessToast(txn);
-    } on PaymentCompletionException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _voucherCode = '';
-      });
-      provider.clearPaymentDrafts();
-      _showPaymentSuccessToast(error.transaction);
-      _showPrintWarningToast(error);
     } catch (error) {
       if (!mounted) return;
       _showPaymentFailureToast(error);
@@ -126,22 +122,6 @@ class _PaymentPanelState extends State<PaymentPanel> {
       );
   }
 
-  void _showPrintWarningToast(PaymentCompletionException error) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(12),
-        backgroundColor: const Color(0xFFB45309),
-        duration: const Duration(seconds: 4),
-        content: Text(
-          _friendlyPrintWarning(error),
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
-    );
-  }
-
   void _showPaymentFailureToast(Object error) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
@@ -156,20 +136,6 @@ class _PaymentPanelState extends State<PaymentPanel> {
         ),
       ),
     );
-  }
-
-  String _friendlyPrintWarning(PaymentCompletionException error) {
-    final cause = error.cause.toString().toLowerCase();
-    if (cause.contains('printer') || cause.contains('network')) {
-      return 'Payment is completed.\n'
-          'Cause: the receipt printer is not ready.\n'
-          'Try: check printer power, paper, and Wi-Fi, then try printing again.\n'
-          'Tell technician: payment saved, receipt print failed.';
-    }
-    return 'Payment is completed.\n'
-        'Cause: the receipt could not be prepared right now.\n'
-        'Try: wait a moment and try printing again.\n'
-        'Tell technician: payment saved, receipt print failed.';
   }
 
   String _friendlyPaymentFailure(Object error) {
@@ -449,10 +415,7 @@ class _PaymentPanelState extends State<PaymentPanel> {
     final rows = <List<double>>[];
     for (var i = 0; i < visible.length; i += 3) {
       rows.add(
-        visible.sublist(
-          i,
-          (i + 3) > visible.length ? visible.length : i + 3,
-        ),
+        visible.sublist(i, (i + 3) > visible.length ? visible.length : i + 3),
       );
     }
 
@@ -491,7 +454,8 @@ class _PaymentPanelState extends State<PaymentPanel> {
                             child: InkWell(
                               key: Key('cash-denomination-$label'),
                               onTap: isEnabled
-                                  ? () => _onCashDenominationTap(provider, amount)
+                                  ? () =>
+                                        _onCashDenominationTap(provider, amount)
                                   : null,
                               borderRadius: BorderRadius.circular(10),
                               child: Center(
