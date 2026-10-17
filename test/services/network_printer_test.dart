@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pos_desktop/models/transaction.dart';
@@ -7,6 +10,38 @@ import 'package:flutter_pos_desktop/services/receipt_printer.dart';
 import 'package:flutter_pos_desktop/services/network_printer_driver.dart';
 
 void main() {
+  Future<ServerSocket> _startMockStatusServer({
+    required int errorStatus,
+    required int paperStatus,
+  }) async {
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    unawaited(() async {
+      await for (final client in server) {
+        client.listen(
+          (data) {
+            if (data.length < 3 || data[0] != 0x10 || data[1] != 0x04) {
+              return;
+            }
+            final code = data[2];
+            if (code == 3) {
+              client.add([errorStatus]);
+              return;
+            }
+            if (code == 4) {
+              client.add([paperStatus]);
+              return;
+            }
+            client.add([0x00]);
+          },
+          onError: (_) => client.destroy(),
+          onDone: () => client.destroy(),
+          cancelOnError: true,
+        );
+      }
+    }());
+    return server;
+  }
+
   group('NetworkPrinterDriver', () {
     late NetworkPrinterDriver driver;
 
@@ -65,6 +100,75 @@ void main() {
         throwsA(isA<PrinterException>()),
       );
     });
+
+    test('testConnection passes when printer health is good', () async {
+      final server = await _startMockStatusServer(
+        errorStatus: 0x00,
+        paperStatus: 0x00,
+      );
+      final printer = PrinterDevice(
+        id: 'tcp-local-ok',
+        name: 'Mock Printer OK',
+        connectionType: PrinterConnectionType.tcpIp,
+        address: InternetAddress.loopbackIPv4.address,
+        port: server.port,
+      );
+
+      await driver.testConnection(printer);
+      await server.close();
+    });
+
+    test('testConnection fails when printer reports out-of-paper', () async {
+      final server = await _startMockStatusServer(
+        errorStatus: 0x00,
+        paperStatus: 0x40,
+      );
+      final printer = PrinterDevice(
+        id: 'tcp-local-paper',
+        name: 'Mock Printer Paper',
+        connectionType: PrinterConnectionType.tcpIp,
+        address: InternetAddress.loopbackIPv4.address,
+        port: server.port,
+      );
+
+      await expectLater(
+        driver.testConnection(printer),
+        throwsA(
+          isA<PrinterException>().having(
+            (e) => e.toString().toLowerCase(),
+            'message',
+            contains('out of paper'),
+          ),
+        ),
+      );
+      await server.close();
+    });
+
+    test('testConnection fails when printer reports hardware error', () async {
+      final server = await _startMockStatusServer(
+        errorStatus: 0x08,
+        paperStatus: 0x00,
+      );
+      final printer = PrinterDevice(
+        id: 'tcp-local-hw',
+        name: 'Mock Printer HW',
+        connectionType: PrinterConnectionType.tcpIp,
+        address: InternetAddress.loopbackIPv4.address,
+        port: server.port,
+      );
+
+      await expectLater(
+        driver.testConnection(printer),
+        throwsA(
+          isA<PrinterException>().having(
+            (e) => e.toString().toLowerCase(),
+            'message',
+            contains('hardware error'),
+          ),
+        ),
+      );
+      await server.close();
+    });
   });
 
   group('NetworkPrinterDiscovery', () {
@@ -74,14 +178,17 @@ void main() {
       discovery = NetworkPrinterDiscovery();
     });
 
-    test('discoverPrinters returns empty list (requires network setup)', () async {
-      final printers = await discovery.discoverPrinters();
-      expect(printers, isEmpty);
-    });
+    test(
+      'discoverPrinters returns empty list (requires network setup)',
+      () async {
+        final printers = await discovery.discoverPrinters();
+        expect(printers, isEmpty);
+      },
+    );
 
     test('addKnownPrinter verifies connectivity before adding', () async {
       const validIp = '192.168.1.999'; // Invalid - should fail
-      
+
       expect(
         () => discovery.addKnownPrinter(
           id: 'test-printer',

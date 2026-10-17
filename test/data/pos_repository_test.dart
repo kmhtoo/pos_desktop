@@ -103,10 +103,15 @@ void main() {
       expect(loaded.first.id, 'TXN-1');
     });
 
-    test('loadTransactionsForShift returns empty list when none exist', () async {
-      final txns = await repository.loadTransactionsForShift('SHF-nonexistent');
-      expect(txns, isEmpty);
-    });
+    test(
+      'loadTransactionsForShift returns empty list when none exist',
+      () async {
+        final txns = await repository.loadTransactionsForShift(
+          'SHF-nonexistent',
+        );
+        expect(txns, isEmpty);
+      },
+    );
 
     test('updateTransactionVoid marks transaction as voided', () async {
       final product = const Product(
@@ -136,10 +141,7 @@ void main() {
 
       await repository.insertTransaction(txn);
 
-      final voidedTxn = txn.voidWith(
-        voidedByName: 'John',
-        voidedById: 'user1',
-      );
+      final voidedTxn = txn.voidWith(voidedByName: 'John', voidedById: 'user1');
 
       await repository.updateTransactionVoid(voidedTxn);
 
@@ -200,7 +202,10 @@ void main() {
 
       await repository.saveShift(shift);
 
-      final closedShift = shift.close(closedByName: 'John', closedById: 'user1');
+      final closedShift = shift.close(
+        closedByName: 'John',
+        closedById: 'user1',
+      );
       await repository.saveShift(closedShift);
 
       final loaded = await repository.loadShiftsForDay('BD-20240101');
@@ -226,6 +231,25 @@ void main() {
 
       final loaded = await repository.loadActiveBusinessDay();
       expect(loaded, isNull); // Closed business day is not active
+    });
+
+    test('receipt template settings can be saved and loaded', () async {
+      await repository.saveReceiptTemplateSettings({
+        'receipt.businessName': 'MY CAFE',
+        'receipt.subtitle': 'CUSTOM RECEIPT',
+        'receipt.address': 'No. 11, Main Rd',
+        'receipt.phone': '09-7777777',
+        'receipt.footerMessage': 'Thanks!',
+        'receipt.footerNote': 'Visit again',
+      });
+
+      final loaded = await repository.loadReceiptTemplateSettings();
+      expect(loaded['receipt.businessName'], 'MY CAFE');
+      expect(loaded['receipt.subtitle'], 'CUSTOM RECEIPT');
+      expect(loaded['receipt.address'], 'No. 11, Main Rd');
+      expect(loaded['receipt.phone'], '09-7777777');
+      expect(loaded['receipt.footerMessage'], 'Thanks!');
+      expect(loaded['receipt.footerNote'], 'Visit again');
     });
   });
 }

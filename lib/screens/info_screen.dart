@@ -432,6 +432,8 @@ class _ReceiptHistoryDialog extends StatelessWidget {
                           const SizedBox(height: 10),
                       itemBuilder: (ctx, i) => _ReceiptTile(
                         transaction: txns[i],
+                        onPrint: () =>
+                            _printReceipt(context, provider, txns[i]),
                         onVoid: () => _confirmVoid(context, provider, txns[i]),
                       ),
                     ),
@@ -596,14 +598,44 @@ class _ReceiptHistoryDialog extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _printReceipt(
+    BuildContext context,
+    PosProvider provider,
+    Transaction transaction,
+  ) async {
+    try {
+      await provider.reprintReceipt(transaction);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            transaction.isVoided
+                ? 'VOID receipt sent to printer.'
+                : 'Receipt sent to printer.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to print receipt: $error')),
+      );
+    }
+  }
 }
 
 // ── Receipt Tile ──────────────────────────────────────────────────────────────
 
 class _ReceiptTile extends StatelessWidget {
-  const _ReceiptTile({required this.transaction, required this.onVoid});
+  const _ReceiptTile({
+    required this.transaction,
+    required this.onPrint,
+    required this.onVoid,
+  });
 
   final Transaction transaction;
+  final VoidCallback onPrint;
   final VoidCallback onVoid;
 
   @override
@@ -725,50 +757,85 @@ class _ReceiptTile extends StatelessWidget {
               ),
             ),
           ],
-          if (!t.isVoided) ...[
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onPrint,
+                  icon: const Icon(Icons.print_outlined, size: 16),
+                  label: Text(
+                    t.isVoided ? 'Print VOID' : 'Print receipt',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
-                ),
-                child: ElevatedButton.icon(
-                  onPressed: onVoid,
-                  icon: const Icon(Icons.block, size: 16),
-                  label: const Text(
-                    'Void',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(
-                      0xFFEF4444,
-                    ).withValues(alpha: 0.2),
-                    foregroundColor: const Color(0xFFEF4444),
-                    elevation: 0,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: t.isVoided
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFF14B8A6),
+                    side: BorderSide(
+                      color: t.isVoided
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFF14B8A6),
+                    ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 8,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
-                      side: const BorderSide(
-                        color: Color(0xFFEF4444),
-                        width: 1.2,
-                      ),
                     ),
                   ),
                 ),
-              ),
+                if (!t.isVoided)
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: onVoid,
+                      icon: const Icon(Icons.block, size: 16),
+                      label: const Text(
+                        'Void',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(
+                          0xFFEF4444,
+                        ).withValues(alpha: 0.2),
+                        foregroundColor: const Color(0xFFEF4444),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: const BorderSide(
+                            color: Color(0xFFEF4444),
+                            width: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );

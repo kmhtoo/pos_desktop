@@ -33,40 +33,138 @@ class SystemScreen extends StatelessWidget {
       ),
       body: Consumer<PosProvider>(
         builder: (context, provider, _) {
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _SectionLabel(label: 'BUSINESS DAY'),
-              const SizedBox(height: 8),
-              _BusinessDayCard(provider: provider, fmt: _fmt),
-              const SizedBox(height: 20),
-              _SectionLabel(label: 'CURRENT SHIFT'),
-              const SizedBox(height: 8),
-              _ShiftCard(provider: provider, fmt: _fmt),
-              const SizedBox(height: 20),
-              _SectionLabel(label: 'APP SETTINGS'),
-              const SizedBox(height: 8),
-              _AppSettingsCard(provider: provider),
-              const SizedBox(height: 20),
-              _SectionLabel(label: 'PRINTERS'),
-              const SizedBox(height: 8),
-              _PrinterSettingsCard(provider: provider),
-              if (provider.todayShifts.any((s) => !s.isOpen)) ...[
-                const SizedBox(height: 20),
-                _SectionLabel(label: "TODAY'S SHIFTS"),
-                const SizedBox(height: 8),
-                ...provider.todayShifts
-                    .where((s) => !s.isOpen)
-                    .map(
-                      (s) => _PastShiftTile(
-                        shift: s,
-                        receiptCount: provider.shiftReceiptCountFor(s.id),
-                        totalSales: provider.shiftTotalSalesFor(s.id),
-                        fmt: _fmt,
-                      ),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 900;
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1180),
+                  child: ListView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: wide ? 32 : 16,
+                      vertical: wide ? 28 : 20,
                     ),
-              ],
-            ],
+                    children: [
+                      _SystemOverview(provider: provider),
+                      const SizedBox(height: 28),
+                      if (wide)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _DashboardSectionHeading(
+                                    icon: Icons.store_outlined,
+                                    title: 'Business day',
+                                    description:
+                                        'Manage today’s trading session.',
+                                  ),
+                                ),
+                                const SizedBox(width: 20),
+                                Expanded(
+                                  child: _DashboardSectionHeading(
+                                    icon: Icons.schedule_outlined,
+                                    title: 'Current shift',
+                                    description:
+                                        'Open, review, or close a cashier shift.',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              height: 300,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: _BusinessDayCard(
+                                      key: const ValueKey('business-day-card'),
+                                      provider: provider,
+                                      fmt: _fmt,
+                                      fillActions: true,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  Expanded(
+                                    child: _ShiftCard(
+                                      key: const ValueKey('current-shift-card'),
+                                      provider: provider,
+                                      fmt: _fmt,
+                                      fillActions: true,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      else ...[
+                        _DashboardSection(
+                          icon: Icons.store_outlined,
+                          title: 'Business day',
+                          description: 'Manage today’s trading session.',
+                          child: _BusinessDayCard(
+                            provider: provider,
+                            fmt: _fmt,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        _DashboardSection(
+                          icon: Icons.schedule_outlined,
+                          title: 'Current shift',
+                          description:
+                              'Open, review, or close a cashier shift.',
+                          child: _ShiftCard(provider: provider, fmt: _fmt),
+                        ),
+                      ],
+                      const SizedBox(height: 28),
+                      _DashboardSection(
+                        icon: Icons.tune,
+                        title: 'App settings',
+                        description:
+                            'Customize checkout behavior and receipt details.',
+                        child: _AppSettingsCard(provider: provider),
+                      ),
+                      const SizedBox(height: 24),
+                      _DashboardSection(
+                        icon: Icons.print_outlined,
+                        title: 'Printers',
+                        description:
+                            'Discover devices, assign printer roles, and test connections.',
+                        child: _PrinterSettingsCard(provider: provider),
+                      ),
+                      if (provider.todayShifts.any((s) => !s.isOpen)) ...[
+                        const SizedBox(height: 24),
+                        _DashboardSection(
+                          icon: Icons.history,
+                          title: 'Completed shifts',
+                          description: 'Activity recorded earlier today.',
+                          child: Column(
+                            children: provider.todayShifts
+                                .where((s) => !s.isOpen)
+                                .map(
+                                  (s) => _PastShiftTile(
+                                    shift: s,
+                                    receiptCount: provider.shiftReceiptCountFor(
+                                      s.id,
+                                    ),
+                                    totalSales: provider.shiftTotalSalesFor(
+                                      s.id,
+                                    ),
+                                    fmt: _fmt,
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
           );
         },
       ),
@@ -74,28 +172,213 @@ class SystemScreen extends StatelessWidget {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
-  final String label;
+class _SystemOverview extends StatelessWidget {
+  const _SystemOverview({required this.provider});
+
+  final PosProvider provider;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: Color(0xFF64748B),
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1.0,
+    final dayOpen = provider.hasActiveBusinessDay;
+    final shiftOpen = provider.hasActiveShift;
+    final userName = provider.currentUser?.name;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1E293B), Color(0xFF172B3B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: const Color(0xFF14B8A6).withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.point_of_sale,
+              color: Color(0xFF2DD4BF),
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userName == null
+                      ? 'Point of sale setup'
+                      : 'Welcome, $userName',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Manage your business day, shifts, and devices.',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusPill(
+                      label: dayOpen ? 'Day open' : 'Day closed',
+                      isActive: dayOpen,
+                    ),
+                    _StatusPill(
+                      label: shiftOpen ? 'Shift open' : 'No active shift',
+                      isActive: shiftOpen,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.isActive});
+
+  final String label;
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? const Color(0xFF34D399) : const Color(0xFF94A3B8);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isActive ? Icons.check_circle : Icons.circle_outlined,
+            color: color,
+            size: 13,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardSection extends StatelessWidget {
+  const _DashboardSection({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.child,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DashboardSectionHeading(
+          icon: icon,
+          title: title,
+          description: description,
+        ),
+        child,
+      ],
+    );
+  }
+}
+
+class _DashboardSectionHeading extends StatelessWidget {
+  const _DashboardSectionHeading({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF2DD4BF), size: 18),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFFE2E8F0),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _BusinessDayCard extends StatelessWidget {
-  const _BusinessDayCard({required this.provider, required this.fmt});
+  const _BusinessDayCard({
+    super.key,
+    required this.provider,
+    required this.fmt,
+    this.fillActions = false,
+  });
   final PosProvider provider;
   final String Function(DateTime) fmt;
+  final bool fillActions;
 
   @override
   Widget build(BuildContext context) {
@@ -166,11 +449,13 @@ class _BusinessDayCard extends StatelessWidget {
                 value: '${fmt(bd.closedAt!)} by ${bd.closedByName ?? '—'}',
               ),
           ],
+          if (fillActions) const Spacer(),
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: isOpen
                 ? OutlinedButton.icon(
+                    key: const ValueKey('business-day-action'),
                     onPressed: () => _confirmCloseDay(context, provider),
                     icon: const Icon(Icons.lock_outline, size: 16),
                     label: const Text('Close Business Day'),
@@ -250,7 +535,9 @@ class _BusinessDayCard extends StatelessWidget {
           ),
           _ConfirmDialogDetail(
             label: 'Shifts Done',
-            value: provider.todayShifts.where((shift) => !shift.isOpen).length
+            value: provider.todayShifts
+                .where((shift) => !shift.isOpen)
+                .length
                 .toString(),
           ),
         ],
@@ -265,9 +552,15 @@ class _BusinessDayCard extends StatelessWidget {
 }
 
 class _ShiftCard extends StatelessWidget {
-  const _ShiftCard({required this.provider, required this.fmt});
+  const _ShiftCard({
+    super.key,
+    required this.provider,
+    required this.fmt,
+    this.fillActions = false,
+  });
   final PosProvider provider;
   final String Function(DateTime) fmt;
+  final bool fillActions;
 
   @override
   Widget build(BuildContext context) {
@@ -289,9 +582,11 @@ class _ShiftCard extends StatelessWidget {
           children: [
             Icon(Icons.info_outline, color: Color(0xFF64748B), size: 18),
             SizedBox(width: 10),
-            Text(
-              'Open a business day first',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+            Expanded(
+              child: Text(
+                'Open a business day first',
+                style: TextStyle(color: Color(0xFF64748B), fontSize: 14),
+              ),
             ),
           ],
         ),
@@ -359,6 +654,7 @@ class _ShiftCard extends StatelessWidget {
             ),
           ],
           if (!hasShift) ...[
+            if (fillActions) const Spacer(),
             if (shift != null) const SizedBox(height: 14),
             if (available.isEmpty)
               const Text(
@@ -413,6 +709,7 @@ class _ShiftCard extends StatelessWidget {
             ],
           ],
           if (hasShift) ...[
+            if (fillActions) const Spacer(),
             if (suspendedCount > 0) ...[
               const SizedBox(height: 12),
               Container(
@@ -439,15 +736,18 @@ class _ShiftCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
+                key: const ValueKey('current-shift-action'),
                 onPressed: suspendedCount > 0
                     ? () => _showSuspendedOrdersBlockMessage(
-                          context,
-                          suspendedCount,
-                        )
+                        context,
+                        suspendedCount,
+                      )
                     : () => _confirmCloseShift(context, provider, shift!),
                 icon: const Icon(Icons.stop_circle_outlined, size: 16),
                 label: Text(
-                  suspendedCount > 0 ? 'Clear Saved Orders First' : 'Close Shift',
+                  suspendedCount > 0
+                      ? 'Clear Saved Orders First'
+                      : 'Close Shift',
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFEF4444),
@@ -506,14 +806,10 @@ class _ShiftCard extends StatelessWidget {
         title: 'Close ${provider.currentShift!.name} Shift?',
         icon: Icons.stop_circle_outlined,
         iconColor: const Color(0xFFEF4444),
-        message:
-            'No orders can be taken after closing this shift.',
+        message: 'No orders can be taken after closing this shift.',
         details: [
           _ConfirmDialogDetail(label: 'Shift', value: shift.name),
-          _ConfirmDialogDetail(
-            label: 'Receipts',
-            value: count.toString(),
-          ),
+          _ConfirmDialogDetail(label: 'Receipts', value: count.toString()),
           _ConfirmDialogDetail(
             label: 'Sales',
             value: '\$${total.toStringAsFixed(2)}',
@@ -639,6 +935,8 @@ class _AppSettingsCard extends StatelessWidget {
             onChanged: provider.setUseAnimatedPageTransitions,
           ),
           const Divider(color: Color(0xFF334155), height: 20),
+          _ReceiptTemplateEditor(provider: provider),
+          const Divider(color: Color(0xFF334155), height: 20),
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -651,11 +949,14 @@ class _AppSettingsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...PosProvider.supportedCashDenominations.asMap().entries.map((entry) {
+          ...PosProvider.supportedCashDenominations.asMap().entries.map((
+            entry,
+          ) {
             final denomination = entry.value;
             return Padding(
               padding: EdgeInsets.only(
-                bottom: entry.key ==
+                bottom:
+                    entry.key ==
                         PosProvider.supportedCashDenominations.length - 1
                     ? 0
                     : 8,
@@ -672,6 +973,181 @@ class _AppSettingsCard extends StatelessWidget {
             );
           }),
         ],
+      ),
+    );
+  }
+}
+
+class _ReceiptTemplateEditor extends StatefulWidget {
+  const _ReceiptTemplateEditor({required this.provider});
+
+  final PosProvider provider;
+
+  @override
+  State<_ReceiptTemplateEditor> createState() => _ReceiptTemplateEditorState();
+}
+
+class _ReceiptTemplateEditorState extends State<_ReceiptTemplateEditor> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _subtitleController;
+  late final TextEditingController _addressController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _footerController;
+  late final TextEditingController _footerNoteController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(
+      text: widget.provider.receiptBusinessName,
+    );
+    _subtitleController = TextEditingController(
+      text: widget.provider.receiptSubtitle,
+    );
+    _addressController = TextEditingController(
+      text: widget.provider.receiptBusinessAddress,
+    );
+    _phoneController = TextEditingController(
+      text: widget.provider.receiptBusinessPhone,
+    );
+    _footerController = TextEditingController(
+      text: widget.provider.receiptFooterMessage,
+    );
+    _footerNoteController = TextEditingController(
+      text: widget.provider.receiptFooterNote,
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _subtitleController.dispose();
+    _addressController.dispose();
+    _phoneController.dispose();
+    _footerController.dispose();
+    _footerNoteController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Receipt Template',
+            style: TextStyle(
+              color: Color(0xFFCBD5E1),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _ReceiptTemplateField(
+            label: 'Business Name',
+            controller: _nameController,
+          ),
+          _ReceiptTemplateField(
+            label: 'Subtitle',
+            controller: _subtitleController,
+          ),
+          _ReceiptTemplateField(
+            label: 'Address',
+            controller: _addressController,
+          ),
+          _ReceiptTemplateField(label: 'Phone', controller: _phoneController),
+          _ReceiptTemplateField(
+            label: 'Footer Message',
+            controller: _footerController,
+          ),
+          _ReceiptTemplateField(
+            label: 'Footer Note',
+            controller: _footerNoteController,
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _saveTemplate,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF14B8A6),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              icon: const Icon(Icons.save_outlined, size: 16),
+              label: const Text('Apply Receipt Template'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveTemplate() async {
+    await widget.provider.saveReceiptTemplateSettings(
+      ReceiptTemplateSettings(
+        businessName: _nameController.text,
+        receiptSubtitle: _subtitleController.text,
+        businessAddress: _addressController.text,
+        businessPhone: _phoneController.text,
+        footerMessage: _footerController.text,
+        footerNote: _footerNoteController.text,
+      ),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Receipt template updated.'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
+class _ReceiptTemplateField extends StatelessWidget {
+  const _ReceiptTemplateField({required this.label, required this.controller});
+
+  final String label;
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: TextField(
+        controller: controller,
+        style: const TextStyle(color: Colors.white, fontSize: 12),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+          isDense: true,
+          filled: true,
+          fillColor: const Color(0xFF1E293B),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFF334155)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFF334155)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Color(0xFF14B8A6)),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 10,
+          ),
+        ),
       ),
     );
   }
@@ -726,7 +1202,9 @@ class _CashDenominationSettingTile extends StatelessWidget {
               Switch(
                 value: isVisible,
                 activeThumbColor: const Color(0xFF14B8A6),
-                activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                activeTrackColor: const Color(
+                  0xFF14B8A6,
+                ).withValues(alpha: 0.4),
                 onChanged: onVisibleChanged,
               ),
               const SizedBox(width: 12),
@@ -738,7 +1216,9 @@ class _CashDenominationSettingTile extends StatelessWidget {
               Switch(
                 value: isEnabled,
                 activeThumbColor: const Color(0xFF14B8A6),
-                activeTrackColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                activeTrackColor: const Color(
+                  0xFF14B8A6,
+                ).withValues(alpha: 0.4),
                 onChanged: onEnabledChanged,
               ),
             ],
@@ -781,6 +1261,29 @@ class _PrinterSettingsCard extends StatelessWidget {
 
   String _friendlyPrinterError(Object error, {required bool isConnectionTest}) {
     final message = error.toString().toLowerCase();
+    if (message.contains('out of paper') ||
+        message.contains('paper is near end')) {
+      return isConnectionTest
+          ? 'Printer is connected but not ready.\n'
+                'Cause: paper roll issue detected.\n'
+                'Try: load a new paper roll and close the cover firmly.\n'
+                'Tell technician: paper sensor reported not ready.'
+          : 'Could not send the test receipt.\n'
+                'Cause: paper roll issue detected.\n'
+                'Try: load a new paper roll and close the cover firmly.\n'
+                'Tell technician: paper sensor reported not ready.';
+    }
+    if (message.contains('cutter') || message.contains('hardware error')) {
+      return isConnectionTest
+          ? 'Printer is connected but not ready.\n'
+                'Cause: printer hardware error detected.\n'
+                'Try: power cycle the printer and check cutter/cover status.\n'
+                'Tell technician: printer reported hardware error.'
+          : 'Could not send the test receipt.\n'
+                'Cause: printer hardware error detected.\n'
+                'Try: power cycle the printer and check cutter/cover status.\n'
+                'Tell technician: printer reported hardware error.';
+    }
     if (message.contains('operation not permitted') ||
         message.contains('not permitted')) {
       return 'Could not reach the printer.\n'
@@ -791,36 +1294,36 @@ class _PrinterSettingsCard extends StatelessWidget {
     if (message.contains('timed out') || message.contains('timeout')) {
       return isConnectionTest
           ? 'Could not reach the printer.\n'
-              'Cause: the printer is taking too long to answer.\n'
-              'Try: check printer power, paper, and Wi-Fi, then try again.\n'
-              'Tell technician: printer not responding.'
+                'Cause: the printer is taking too long to answer.\n'
+                'Try: check printer power, paper, and Wi-Fi, then try again.\n'
+                'Tell technician: printer not responding.'
           : 'Could not send the test receipt.\n'
-              'Cause: the printer is taking too long to answer.\n'
-              'Try: check printer power, paper, and Wi-Fi, then try again.\n'
-              'Tell technician: printer not responding.';
+                'Cause: the printer is taking too long to answer.\n'
+                'Try: check printer power, paper, and Wi-Fi, then try again.\n'
+                'Tell technician: printer not responding.';
     }
     if (message.contains('network') ||
         message.contains('socket') ||
         message.contains('connect')) {
       return isConnectionTest
           ? 'Could not reach the printer.\n'
-              'Cause: the app cannot find the printer on the network.\n'
-              'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
-              'Tell technician: printer connection failed.'
+                'Cause: the app cannot find the printer on the network.\n'
+                'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
+                'Tell technician: printer connection failed.'
           : 'Could not send the test receipt.\n'
-              'Cause: the app cannot find the printer on the network.\n'
-              'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
-              'Tell technician: printer connection failed.';
+                'Cause: the app cannot find the printer on the network.\n'
+                'Try: make sure the printer is on, on the same Wi-Fi, and using the correct IP address.\n'
+                'Tell technician: printer connection failed.';
     }
     return isConnectionTest
         ? 'Could not check the printer right now.\n'
-            'Cause: the printer did not answer as expected.\n'
-            'Try: wait a moment and try again.\n'
-            'Tell technician: printer check failed.'
+              'Cause: the printer did not answer as expected.\n'
+              'Try: wait a moment and try again.\n'
+              'Tell technician: printer check failed.'
         : 'Could not print the test receipt right now.\n'
-            'Cause: the printer did not answer as expected.\n'
-            'Try: wait a moment and try again.\n'
-            'Tell technician: test receipt failed.';
+              'Cause: the printer did not answer as expected.\n'
+              'Try: wait a moment and try again.\n'
+              'Tell technician: test receipt failed.';
   }
 
   @override
@@ -891,6 +1394,54 @@ class _PrinterSettingsCard extends StatelessWidget {
             'Tap Test Connection to allow local network access for printer setup.',
             style: TextStyle(color: Color(0xFF64748B), fontSize: 10),
           ),
+          if (provider.hasPrinterManager) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF334155)),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Receipt Health Check Before Settle',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'When off, settlement skips pre-print status check for faster checkout.',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Switch(
+                    value: provider.receiptPrinterHealthCheckEnabled,
+                    activeThumbColor: const Color(0xFF14B8A6),
+                    activeTrackColor: const Color(
+                      0xFF14B8A6,
+                    ).withValues(alpha: 0.4),
+                    onChanged: provider.setReceiptPrinterHealthCheckEnabled,
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           ...provider.printerRoles.map((role) {
             final assigned = provider.assignedPrinterForRole(role);
@@ -929,7 +1480,11 @@ class _PrinterSettingsCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String?>(
-                      initialValue: assigned != null && provider.discoveredPrinters.any((p) => p.id == assigned.id)
+                      initialValue:
+                          assigned != null &&
+                              provider.discoveredPrinters.any(
+                                (p) => p.id == assigned.id,
+                              )
                           ? assigned.id
                           : null,
                       dropdownColor: const Color(0xFF1E293B),
@@ -970,7 +1525,10 @@ class _PrinterSettingsCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (assigned != null && !provider.discoveredPrinters.any((p) => p.id == assigned.id))
+                        if (assigned != null &&
+                            !provider.discoveredPrinters.any(
+                              (p) => p.id == assigned.id,
+                            ))
                           DropdownMenuItem<String?>(
                             value: assigned.id,
                             child: Text(
@@ -986,7 +1544,8 @@ class _PrinterSettingsCard extends StatelessWidget {
                                 return;
                               }
                               PrinterDevice? device;
-                              for (final printer in provider.discoveredPrinters) {
+                              for (final printer
+                                  in provider.discoveredPrinters) {
                                 if (printer.id == value) {
                                   device = printer;
                                   break;
@@ -998,100 +1557,132 @@ class _PrinterSettingsCard extends StatelessWidget {
                           : null,
                     ),
                     const SizedBox(height: 8),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            assigned == null
-                                ? 'No printer assigned'
-                                : _deviceLabel(assigned),
-                            style: const TextStyle(
-                              color: Color(0xFF94A3B8),
-                              fontSize: 11,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                        Text(
+                          assigned == null
+                              ? 'No printer assigned'
+                              : _deviceLabel(assigned),
+                          style: const TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 11,
                           ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: assigned == null || !provider.hasPrinterManager
-                              ? null
-                              : () {
-                                  provider.testPrinter(role).then((_) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        duration: const Duration(seconds: 4),
-                                        content: Text(
-                                          'Test receipt sent to ${_roleLabel(role)} printer.',
-                                        ),
-                                      ),
-                                    );
-                                  }).catchError((error) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: const Color(0xFFB91C1C),
-                                        duration: const Duration(seconds: 5),
-                                        content: Text(
-                                          _friendlyPrinterError(
-                                            error,
-                                            isConnectionTest: false,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  });
-                                },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF14B8A6),
-                            side: const BorderSide(color: Color(0xFF14B8A6)),
-                            textStyle: const TextStyle(fontSize: 11),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton(
+                              onPressed:
+                                  assigned == null ||
+                                      !provider.hasPrinterManager
+                                  ? null
+                                  : () {
+                                      provider
+                                          .testPrinter(role)
+                                          .then((_) {
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                duration: const Duration(
+                                                  seconds: 4,
+                                                ),
+                                                content: Text(
+                                                  'Test receipt sent to ${_roleLabel(role)} printer.',
+                                                ),
+                                              ),
+                                            );
+                                          })
+                                          .catchError((error) {
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                backgroundColor: const Color(
+                                                  0xFFB91C1C,
+                                                ),
+                                                duration: const Duration(
+                                                  seconds: 5,
+                                                ),
+                                                content: Text(
+                                                  _friendlyPrinterError(
+                                                    error,
+                                                    isConnectionTest: false,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          });
+                                    },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF14B8A6),
+                                side: const BorderSide(
+                                  color: Color(0xFF14B8A6),
+                                ),
+                                textStyle: const TextStyle(fontSize: 11),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                              ),
+                              child: const Text('Test Epson Print'),
                             ),
-                          ),
-                          child: const Text('Test Epson Print'),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: assigned == null || !provider.hasPrinterManager
-                              ? null
-                              : () {
-                                  provider.testPrinterConnection(role).then((_) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: const Color(0xFF065F46),
-                                        duration: const Duration(seconds: 4),
-                                        content: Text(
-                                          '${_roleLabel(role)} printer is ready.',
-                                        ),
-                                      ),
-                                    );
-                                  }).catchError((error) {
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: const Color(0xFFB91C1C),
-                                        duration: const Duration(seconds: 5),
-                                        content: Text(
-                                          _friendlyPrinterError(
-                                            error,
-                                            isConnectionTest: true,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  });
-                                },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF38BDF8),
-                            side: const BorderSide(color: Color(0xFF38BDF8)),
-                            textStyle: const TextStyle(fontSize: 11),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
+                            OutlinedButton(
+                              onPressed:
+                                  assigned == null ||
+                                      !provider.hasPrinterManager
+                                  ? null
+                                  : () {
+                                      provider
+                                          .testPrinterConnection(role)
+                                          .then((_) {
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                backgroundColor: const Color(
+                                                  0xFF065F46,
+                                                ),
+                                                duration: const Duration(
+                                                  seconds: 4,
+                                                ),
+                                                content: Text(
+                                                  '${_roleLabel(role)} printer is ready.',
+                                                ),
+                                              ),
+                                            );
+                                          })
+                                          .catchError((error) {
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                backgroundColor: const Color(
+                                                  0xFFB91C1C,
+                                                ),
+                                                duration: const Duration(
+                                                  seconds: 5,
+                                                ),
+                                                content: Text(
+                                                  _friendlyPrinterError(
+                                                    error,
+                                                    isConnectionTest: true,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          });
+                                    },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF38BDF8),
+                                side: const BorderSide(
+                                  color: Color(0xFF38BDF8),
+                                ),
+                                textStyle: const TextStyle(fontSize: 11),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                              ),
+                              child: const Text('Test Connection'),
                             ),
-                          ),
-                          child: const Text('Test Connection'),
+                          ],
                         ),
                       ],
                     ),
@@ -1416,20 +2007,14 @@ class _ConfirmDialog extends StatelessWidget {
 }
 
 class _ConfirmDialogDetail {
-  const _ConfirmDialogDetail({
-    required this.label,
-    required this.value,
-  });
+  const _ConfirmDialogDetail({required this.label, required this.value});
 
   final String label;
   final String value;
 }
 
 class _ConfirmDialogMetric extends StatelessWidget {
-  const _ConfirmDialogMetric({
-    required this.detail,
-    required this.accentColor,
-  });
+  const _ConfirmDialogMetric({required this.detail, required this.accentColor});
 
   final _ConfirmDialogDetail detail;
   final Color accentColor;

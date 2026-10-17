@@ -1,7 +1,16 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../providers/pos_provider.dart';
 import '../models/transaction.dart';
+import '../services/esc_pos_preview_renderer.dart';
+import '../services/receipt_printer.dart';
 
 class PaymentPanel extends StatefulWidget {
   const PaymentPanel({super.key});
@@ -18,8 +27,13 @@ class _PaymentPanelState extends State<PaymentPanel> {
     provider.setVoucherCodeDraft(_voucherCode.trim());
   }
 
-  Future<void> _onCashDenominationTap(PosProvider provider, double amount) async {
-    if (_isProcessing || provider.cartIsEmpty || !provider.hasActiveShift) return;
+  Future<void> _onCashDenominationTap(
+    PosProvider provider,
+    double amount,
+  ) async {
+    if (_isProcessing || provider.cartIsEmpty || !provider.hasActiveShift) {
+      return;
+    }
     provider.addCashDenominationDraft(amount);
     if (provider.amountDueDraft > 0) return;
     await _processPayment(
@@ -75,14 +89,6 @@ class _PaymentPanelState extends State<PaymentPanel> {
       provider.clearPaymentDrafts();
 
       _showPaymentSuccessToast(txn);
-    } on PaymentCompletionException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _voucherCode = '';
-      });
-      provider.clearPaymentDrafts();
-      _showPaymentSuccessToast(error.transaction);
-      _showPrintWarningToast(error);
     } catch (error) {
       if (!mounted) return;
       _showPaymentFailureToast(error);
@@ -126,22 +132,6 @@ class _PaymentPanelState extends State<PaymentPanel> {
       );
   }
 
-  void _showPrintWarningToast(PaymentCompletionException error) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(12),
-        backgroundColor: const Color(0xFFB45309),
-        duration: const Duration(seconds: 4),
-        content: Text(
-          _friendlyPrintWarning(error),
-          style: const TextStyle(color: Colors.white),
-        ),
-      ),
-    );
-  }
-
   void _showPaymentFailureToast(Object error) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
@@ -156,20 +146,6 @@ class _PaymentPanelState extends State<PaymentPanel> {
         ),
       ),
     );
-  }
-
-  String _friendlyPrintWarning(PaymentCompletionException error) {
-    final cause = error.cause.toString().toLowerCase();
-    if (cause.contains('printer') || cause.contains('network')) {
-      return 'Payment is completed.\n'
-          'Cause: the receipt printer is not ready.\n'
-          'Try: check printer power, paper, and Wi-Fi, then try printing again.\n'
-          'Tell technician: payment saved, receipt print failed.';
-    }
-    return 'Payment is completed.\n'
-        'Cause: the receipt could not be prepared right now.\n'
-        'Try: wait a moment and try printing again.\n'
-        'Tell technician: payment saved, receipt print failed.';
   }
 
   String _friendlyPaymentFailure(Object error) {
@@ -449,10 +425,7 @@ class _PaymentPanelState extends State<PaymentPanel> {
     final rows = <List<double>>[];
     for (var i = 0; i < visible.length; i += 3) {
       rows.add(
-        visible.sublist(
-          i,
-          (i + 3) > visible.length ? visible.length : i + 3,
-        ),
+        visible.sublist(i, (i + 3) > visible.length ? visible.length : i + 3),
       );
     }
 
@@ -491,7 +464,8 @@ class _PaymentPanelState extends State<PaymentPanel> {
                             child: InkWell(
                               key: Key('cash-denomination-$label'),
                               onTap: isEnabled
-                                  ? () => _onCashDenominationTap(provider, amount)
+                                  ? () =>
+                                        _onCashDenominationTap(provider, amount)
                                   : null,
                               borderRadius: BorderRadius.circular(10),
                               child: Center(
@@ -630,6 +604,25 @@ class _TransactionCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: Key('review-receipt-${t.id}'),
+              onPressed: () => _showReceiptReview(context, t),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF38BDF8),
+                side: const BorderSide(color: Color(0xFF38BDF8)),
+                textStyle: const TextStyle(fontSize: 11),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+              ),
+              icon: const Icon(Icons.receipt_long_outlined, size: 15),
+              label: const Text('Review Receipt'),
+            ),
+          ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -675,6 +668,16 @@ class _TransactionCard extends StatelessWidget {
     );
   }
 
+  Future<void> _showReceiptReview(
+    BuildContext context,
+    Transaction transaction,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (_) => _ReceiptReviewDialog(transaction: transaction),
+    );
+  }
+
   Color _tenderColor(TenderType type) {
     switch (type) {
       case TenderType.cash:
@@ -686,5 +689,559 @@ class _TransactionCard extends StatelessWidget {
       case TenderType.voucher:
         return const Color(0xFF8B5CF6);
     }
+  }
+}
+
+enum _ReceiptReviewMode { detail, paper }
+
+class _ReceiptReviewDialog extends StatefulWidget {
+  const _ReceiptReviewDialog({required this.transaction});
+
+  final Transaction transaction;
+
+  @override
+  State<_ReceiptReviewDialog> createState() => _ReceiptReviewDialogState();
+}
+
+class _ReceiptReviewDialogState extends State<_ReceiptReviewDialog> {
+  static const double _receiptPaperWidthPx = 332;
+  final GlobalKey _paperPreviewKey = GlobalKey();
+  _ReceiptReviewMode _mode = _ReceiptReviewMode.detail;
+
+  String _formatDateTime(DateTime dt) {
+    final date =
+        '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    final time =
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return '$date $time';
+  }
+
+  List<EscPosPreviewLine> _buildReceiptPreviewLines(Transaction transaction) {
+    final template = context.read<PosProvider>().receiptTemplateSettings;
+    final bytes = const BasicEscPosEncoder().buildReceipt(
+      transaction,
+      template: template,
+    );
+    return const EscPosPreviewRenderer().parse(bytes);
+  }
+
+  Future<Uint8List> _capturePaperPreviewPng() async {
+    if (_mode != _ReceiptReviewMode.paper) {
+      setState(() => _mode = _ReceiptReviewMode.paper);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    final boundary =
+        _paperPreviewKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
+    if (boundary == null) {
+      throw StateError('Paper preview is not ready for export.');
+    }
+    final image = await boundary.toImage(pixelRatio: 3);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) {
+      throw StateError('Failed to convert preview to PNG bytes.');
+    }
+    return byteData.buffer.asUint8List();
+  }
+
+  Future<void> _viewPngPreview() async {
+    final bytes = await _capturePaperPreviewPng();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        key: const Key('receipt-png-preview-dialog'),
+        backgroundColor: const Color(0xFF0F172A),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 700),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'PNG Preview',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      key: const Key('receipt-png-preview-close'),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close, color: Color(0xFF94A3B8)),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFF334155)),
+              Expanded(
+                child: Center(
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4,
+                    child: Image.memory(
+                      bytes,
+                      key: const Key('receipt-png-preview-image'),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<Uint8List> _buildPdfBytes() async {
+    final lines = _buildReceiptPreviewLines(widget.transaction);
+    final contentHeightMm = lines.fold<double>(
+      0,
+      (sum, line) => sum + (line.doubleSize ? 7.2 : 4.2),
+    );
+    final pageHeightMm = (contentHeightMm + 18).clamp(100, 400);
+    final doc = pw.Document();
+    final courier = pw.Font.courier();
+    final courierBold = pw.Font.courierBold();
+
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat(
+          88 * PdfPageFormat.mm,
+          pageHeightMm * PdfPageFormat.mm,
+        ),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+        build: (ctx) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              for (final line in lines)
+                line.text.isEmpty
+                    ? pw.SizedBox(height: (line.doubleSize ? 7.2 : 4.2))
+                    : pw.Align(
+                        alignment: switch (line.align) {
+                          TextAlign.center => pw.Alignment.center,
+                          TextAlign.right => pw.Alignment.centerRight,
+                          _ => pw.Alignment.centerLeft,
+                        },
+                        child: pw.Text(
+                          line.text,
+                          textAlign: switch (line.align) {
+                            TextAlign.center => pw.TextAlign.center,
+                            TextAlign.right => pw.TextAlign.right,
+                            _ => pw.TextAlign.left,
+                          },
+                          style: pw.TextStyle(
+                            font: line.bold ? courierBold : courier,
+                            fontSize: line.doubleSize ? 10.8 : 8.2,
+                            lineSpacing: 0,
+                          ),
+                        ),
+                      ),
+            ],
+          );
+        },
+      ),
+    );
+
+    return doc.save();
+  }
+
+  Future<void> _viewPdfPreview() async {
+    final pdfBytes = await _buildPdfBytes();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        key: const Key('receipt-pdf-preview-dialog'),
+        backgroundColor: const Color(0xFF0F172A),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: SizedBox(
+          width: 760,
+          height: 760,
+          child: PdfPreview(
+            key: const Key('receipt-pdf-preview-widget'),
+            canChangePageFormat: false,
+            canChangeOrientation: false,
+            canDebug: false,
+            allowPrinting: false,
+            allowSharing: false,
+            build: (_) async => pdfBytes,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _viewReceiptAsPng() async {
+    try {
+      await _viewPngPreview();
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFB91C1C),
+          duration: const Duration(seconds: 5),
+          content: Text('Failed to open PNG preview: $error'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _viewReceiptAsPdf() async {
+    try {
+      await _viewPdfPreview();
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFB91C1C),
+          duration: const Duration(seconds: 5),
+          content: Text('Failed to open PDF preview: $error'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildPaperReceipt(Transaction transaction) {
+    const baseSize = 10.8;
+    const baseHeight = 1.22;
+    final previewLines = _buildReceiptPreviewLines(transaction);
+
+    return Center(
+      child: RepaintBoundary(
+        key: _paperPreviewKey,
+        child: Container(
+          key: const Key('receipt-paper-preview'),
+          width: _receiptPaperWidthPx,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFAFAFA),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFD1D5DB)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: previewLines.map((line) {
+                final fontSize = line.doubleSize ? baseSize * 1.95 : baseSize;
+                final style = TextStyle(
+                  color: const Color(0xFF111827),
+                  fontSize: fontSize,
+                  height: baseHeight,
+                  letterSpacing: 0.05,
+                  fontFamily: 'Courier',
+                  fontWeight: line.bold ? FontWeight.w700 : FontWeight.w500,
+                );
+
+                if (line.text.isEmpty) {
+                  return SizedBox(height: fontSize * baseHeight);
+                }
+
+                final alignment = switch (line.align) {
+                  TextAlign.center => Alignment.center,
+                  TextAlign.right => Alignment.centerRight,
+                  _ => Alignment.centerLeft,
+                };
+
+                return Align(
+                  alignment: alignment,
+                  child: Text(line.text, style: style, textAlign: line.align),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final transaction = widget.transaction;
+    return Dialog(
+      key: const Key('receipt-review-dialog'),
+      backgroundColor: const Color(0xFF0F172A),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.receipt_long_outlined,
+                    color: Color(0xFF38BDF8),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Receipt Review',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('receipt-review-close'),
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, color: Color(0xFF94A3B8)),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFF334155)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        key: const Key('receipt-view-png'),
+                        onPressed: _viewReceiptAsPng,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF38BDF8),
+                          side: const BorderSide(color: Color(0xFF38BDF8)),
+                          textStyle: const TextStyle(fontSize: 11),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                        ),
+                        icon: const Icon(Icons.image_outlined, size: 14),
+                        label: const Text('View PNG'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('receipt-view-pdf'),
+                        onPressed: _viewReceiptAsPdf,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF22C55E),
+                          side: const BorderSide(color: Color(0xFF22C55E)),
+                          textStyle: const TextStyle(fontSize: 11),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.picture_as_pdf_outlined,
+                          size: 14,
+                        ),
+                        label: const Text('View PDF'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        key: const Key('receipt-view-mode-detail'),
+                        label: const Text('Detail View'),
+                        selected: _mode == _ReceiptReviewMode.detail,
+                        onSelected: (_) =>
+                            setState(() => _mode = _ReceiptReviewMode.detail),
+                        labelStyle: TextStyle(
+                          color: _mode == _ReceiptReviewMode.detail
+                              ? const Color(0xFF0F172A)
+                              : const Color(0xFFCBD5E1),
+                          fontSize: 11,
+                        ),
+                        selectedColor: const Color(0xFF38BDF8),
+                        backgroundColor: const Color(0xFF1E293B),
+                      ),
+                      ChoiceChip(
+                        key: const Key('receipt-view-mode-paper'),
+                        label: const Text('Paper View'),
+                        selected: _mode == _ReceiptReviewMode.paper,
+                        onSelected: (_) =>
+                            setState(() => _mode = _ReceiptReviewMode.paper),
+                        labelStyle: TextStyle(
+                          color: _mode == _ReceiptReviewMode.paper
+                              ? const Color(0xFF0F172A)
+                              : const Color(0xFFCBD5E1),
+                          fontSize: 11,
+                        ),
+                        selectedColor: const Color(0xFF38BDF8),
+                        backgroundColor: const Color(0xFF1E293B),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _mode == _ReceiptReviewMode.paper
+                    ? _buildPaperReceipt(transaction)
+                    : ListView(
+                        children: [
+                          _ReceiptInfoRow(
+                            label: 'Receipt ID',
+                            value: transaction.id,
+                          ),
+                          _ReceiptInfoRow(
+                            label: 'Time',
+                            value: _formatDateTime(transaction.timestamp),
+                          ),
+                          _ReceiptInfoRow(
+                            label: 'Cashier',
+                            value: transaction.cashierName ?? '—',
+                          ),
+                          _ReceiptInfoRow(
+                            label: 'Payment',
+                            value:
+                                '${transaction.tenderType.emoji} ${transaction.tenderType.label}',
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Items',
+                            style: TextStyle(
+                              color: Color(0xFFCBD5E1),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...transaction.items.map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item.product.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    'x${item.quantity}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF94A3B8),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    '\$${item.total.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: Color(0xFFCBD5E1),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Divider(color: Color(0xFF334155)),
+                          _ReceiptInfoRow(
+                            label: 'Subtotal',
+                            value:
+                                '\$${transaction.subtotal.toStringAsFixed(2)}',
+                          ),
+                          _ReceiptInfoRow(
+                            label: 'Tax',
+                            value: '\$${transaction.tax.toStringAsFixed(2)}',
+                          ),
+                          _ReceiptInfoRow(
+                            label: 'Total',
+                            value: '\$${transaction.total.toStringAsFixed(2)}',
+                            valueColor: const Color(0xFF14B8A6),
+                            bold: true,
+                          ),
+                          if (transaction.tenderType == TenderType.cash)
+                            _ReceiptInfoRow(
+                              label: 'Cash',
+                              value:
+                                  '\$${transaction.cashAmount.toStringAsFixed(2)}',
+                            ),
+                          if (transaction.tenderType == TenderType.card)
+                            _ReceiptInfoRow(
+                              label: 'Card',
+                              value:
+                                  '\$${transaction.cardAmount.toStringAsFixed(2)}',
+                            ),
+                          if (transaction.tenderType == TenderType.cash &&
+                              transaction.change > 0)
+                            _ReceiptInfoRow(
+                              label: 'Change',
+                              value:
+                                  '\$${transaction.change.toStringAsFixed(2)}',
+                              valueColor: const Color(0xFF22C55E),
+                            ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReceiptInfoRow extends StatelessWidget {
+  const _ReceiptInfoRow({
+    required this.label,
+    required this.value,
+    this.valueColor = const Color(0xFFE2E8F0),
+    this.bold = false,
+  });
+
+  final String label;
+  final String value;
+  final Color valueColor;
+  final bool bold;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: 12,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

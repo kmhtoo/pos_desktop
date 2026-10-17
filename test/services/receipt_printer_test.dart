@@ -8,6 +8,7 @@ import 'package:flutter_pos_desktop/services/receipt_printer.dart';
 class _FakeDriver implements PrinterDriver {
   final List<List<int>> sentPayloads = [];
   final List<PrinterDevice> sentDevices = [];
+  final List<PrinterDevice> testedDevices = [];
 
   @override
   bool canHandle(PrinterDevice device) => true;
@@ -20,7 +21,7 @@ class _FakeDriver implements PrinterDriver {
 
   @override
   Future<void> testConnection(PrinterDevice device) async {
-    sentDevices.add(device);
+    testedDevices.add(device);
   }
 }
 
@@ -87,22 +88,85 @@ void main() {
 
       await manager.printReceipt(sampleTransaction());
 
+      expect(driver.testedDevices.single.id, printer.id);
       expect(driver.sentDevices.single.id, printer.id);
       expect(driver.sentPayloads.single, isNotEmpty);
     });
 
-    test('skips receipt printing when no receipt printer is assigned', () async {
+    test('applies custom receipt template values', () async {
       final driver = _FakeDriver();
+      final printer = const PrinterDevice(
+        id: 'tcp-custom-template',
+        name: 'Receipt Printer',
+        connectionType: PrinterConnectionType.tcpIp,
+        address: '192.168.1.70',
+        port: 9100,
+      );
       final manager = PrinterManager(
         discovery: const StaticPrinterDiscovery([]),
         drivers: [driver],
       );
+      manager.assignPrinter(PrinterRole.receipt, printer);
+      manager.setReceiptTemplateSettings(
+        const ReceiptTemplateSettings(
+          businessName: 'MY COFFEE BAR',
+          receiptSubtitle: 'DINE-IN RECEIPT',
+          businessAddress: '123 Main Street',
+          businessPhone: '09-12345678',
+          footerMessage: 'Thank you, see you soon!',
+          footerNote: 'Powered by POS Desktop',
+        ),
+      );
 
       await manager.printReceipt(sampleTransaction());
 
-      expect(driver.sentDevices, isEmpty);
-      expect(driver.sentPayloads, isEmpty);
+      final output = String.fromCharCodes(driver.sentPayloads.single);
+      expect(output, contains('MY COFFEE BAR'));
+      expect(output, contains('DINE-IN RECEIPT'));
+      expect(output, contains('123 Main Street'));
+      expect(output, contains('09-12345678'));
+      expect(output, contains('Thank you, see you soon!'));
+      expect(output, contains('Powered by POS Desktop'));
     });
+
+    test('can skip receipt health check when disabled', () async {
+      final driver = _FakeDriver();
+      final printer = const PrinterDevice(
+        id: 'tcp-no-health',
+        name: 'Receipt Printer',
+        connectionType: PrinterConnectionType.tcpIp,
+        address: '192.168.1.55',
+        port: 9100,
+      );
+      final manager = PrinterManager(
+        discovery: const StaticPrinterDiscovery([]),
+        drivers: [driver],
+      );
+      manager.assignPrinter(PrinterRole.receipt, printer);
+      manager.setReceiptHealthCheckEnabled(false);
+
+      await manager.printReceipt(sampleTransaction());
+
+      expect(driver.testedDevices, isEmpty);
+      expect(driver.sentDevices.single.id, printer.id);
+      expect(driver.sentPayloads.single, isNotEmpty);
+    });
+
+    test(
+      'skips receipt printing when no receipt printer is assigned',
+      () async {
+        final driver = _FakeDriver();
+        final manager = PrinterManager(
+          discovery: const StaticPrinterDiscovery([]),
+          drivers: [driver],
+        );
+
+        await manager.printReceipt(sampleTransaction());
+
+        expect(driver.sentDevices, isEmpty);
+        expect(driver.sentPayloads, isEmpty);
+      },
+    );
 
     test('supports printing to different assigned roles', () async {
       final driver = _FakeDriver();
@@ -129,6 +193,7 @@ void main() {
       await manager.printReceipt(sampleTransaction());
       await manager.printRaw(role: PrinterRole.kitchen, bytes: [1, 2, 3]);
 
+      expect(driver.testedDevices.single.id, receiptPrinter.id);
       expect(driver.sentDevices.first.id, receiptPrinter.id);
       expect(driver.sentDevices.last.id, kitchenPrinter.id);
     });
@@ -150,7 +215,8 @@ void main() {
 
       await manager.testConnection(role: PrinterRole.receipt);
 
-      expect(driver.sentDevices.single.id, printer.id);
+      expect(driver.testedDevices.single.id, printer.id);
+      expect(driver.sentDevices, isEmpty);
       expect(driver.sentPayloads, isEmpty);
     });
 
@@ -210,6 +276,20 @@ void main() {
       expect(bytes, contains(0x1B)); // ESC character
       expect(bytes, contains(0x0A)); // Line feed
       expect(bytes.length, greaterThan(100)); // Should be a substantial receipt
+    });
+
+    test('marks voided receipts with a prominent uppercase VOID label', () {
+      const encoder = BasicEscPosEncoder();
+      final voidedTransaction = sampleTransaction().voidWith(
+        voidedByName: 'Alex',
+        voidedById: '1001',
+      );
+
+      final output = encoder.buildReceiptPreviewText(voidedTransaction);
+
+      expect(output, contains('VOID'));
+      expect(output, contains('Voided by: Alex'));
+      expect(output, contains('Voided at:'));
     });
 
     test('builds a simple Epson test ticket', () {
