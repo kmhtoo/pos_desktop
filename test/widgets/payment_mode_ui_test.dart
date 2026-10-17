@@ -170,6 +170,52 @@ void main() {
       expect(provider.cart, isEmpty);
     });
 
+    testWidgets('history transaction can open receipt review popup', (
+      tester,
+    ) async {
+      final provider = await createReadyProvider();
+
+      await tester.pumpWidget(
+        wrapWithProvider(
+          provider,
+          const Column(
+            children: [
+              PaymentModeDock(),
+              Expanded(child: PaymentPanel()),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('cash-denomination-\$2')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('cash-denomination-\$1')));
+      await tester.pumpAndSettle();
+      expect(provider.transactions.length, 1);
+
+      await tester.tap(find.byKey(const Key('payment-mode-history')));
+      await tester.pumpAndSettle();
+
+      final transaction = provider.transactions.first;
+      await tester.tap(find.byKey(Key('review-receipt-${transaction.id}')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('receipt-review-dialog')), findsOneWidget);
+      expect(find.text('Receipt Review'), findsOneWidget);
+      expect(find.text('Items'), findsOneWidget);
+      expect(find.text(transaction.id), findsWidgets);
+      expect(find.byKey(const Key('receipt-view-png')), findsOneWidget);
+      expect(find.byKey(const Key('receipt-view-pdf')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('receipt-view-mode-paper')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('receipt-paper-preview')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('receipt-review-close')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('receipt-review-dialog')), findsNothing);
+    });
+
     testWidgets('hidden and disabled denominations follow settings', (
       tester,
     ) async {
@@ -190,10 +236,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('cash-denomination-\$10000')),
-        findsNothing,
-      );
+      expect(find.byKey(const Key('cash-denomination-\$10000')), findsNothing);
       expect(find.byKey(const Key('cash-denomination-\$10')), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('cash-denomination-\$10')));
@@ -207,12 +250,7 @@ void main() {
     ) async {
       final provider = await createReadyProvider();
 
-      await tester.pumpWidget(
-        wrapWithProvider(
-          provider,
-          const OrderPanel(),
-        ),
-      );
+      await tester.pumpWidget(wrapWithProvider(provider, const OrderPanel()));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('cash-denomination-\$1')));
@@ -233,12 +271,7 @@ void main() {
     testWidgets('hold save popup stays centered on screen', (tester) async {
       final provider = await createReadyProvider();
 
-      await tester.pumpWidget(
-        wrapWithProvider(
-          provider,
-          const OrderPanel(),
-        ),
-      );
+      await tester.pumpWidget(wrapWithProvider(provider, const OrderPanel()));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('hold-order-button')));
@@ -260,12 +293,7 @@ void main() {
     ) async {
       final provider = await createReadyProvider();
 
-      await tester.pumpWidget(
-        wrapWithProvider(
-          provider,
-          const OrderPanel(),
-        ),
-      );
+      await tester.pumpWidget(wrapWithProvider(provider, const OrderPanel()));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('hold-order-button')));
@@ -283,8 +311,10 @@ void main() {
       final scaffoldSize = tester.getSize(find.byType(Scaffold));
       final panelRect = tester.getRect(panelFinder);
       expect(panelRect.width, closeTo(scaffoldSize.width / 3, 0.001));
-      expect(panelRect.left, closeTo(scaffoldSize.width - panelRect.width, 0.001));
+      expect(
+        panelRect.left,
+        closeTo(scaffoldSize.width - panelRect.width, 0.001),
+      );
     });
-
   });
 }
