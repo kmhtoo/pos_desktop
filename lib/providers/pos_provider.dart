@@ -25,6 +25,12 @@ class PosProvider extends ChangeNotifier {
     0.10,
     0.05,
   ];
+  static const String _receiptBusinessNameKey = 'receipt.businessName';
+  static const String _receiptSubtitleKey = 'receipt.subtitle';
+  static const String _receiptAddressKey = 'receipt.address';
+  static const String _receiptPhoneKey = 'receipt.phone';
+  static const String _receiptFooterMessageKey = 'receipt.footerMessage';
+  static const String _receiptFooterNoteKey = 'receipt.footerNote';
 
   final PosRepository repository;
   final ReceiptPrinter _receiptPrinter;
@@ -36,7 +42,11 @@ class PosProvider extends ChangeNotifier {
     PrinterManager? printerManager,
   }) : _printerManager = printerManager,
        _receiptPrinter =
-           receiptPrinter ?? printerManager ?? const NoOpReceiptPrinter();
+           receiptPrinter ?? printerManager ?? const NoOpReceiptPrinter() {
+    if (_printerManager != null) {
+      _receiptTemplateSettings = _printerManager.receiptTemplateSettings;
+    }
+  }
 
   final List<Product> products = _buildProducts();
   final List<CartItem> _cart = [];
@@ -60,6 +70,8 @@ class PosProvider extends ChangeNotifier {
   List<PrinterDevice> _discoveredPrinters = [];
   bool _isDiscoveringPrinters = false;
   final List<SuspendedOrder> _suspendedOrders = [];
+  ReceiptTemplateSettings _receiptTemplateSettings =
+      const ReceiptTemplateSettings();
 
   BusinessDay? _currentBusinessDay;
   Shift? _currentShift;
@@ -68,6 +80,29 @@ class PosProvider extends ChangeNotifier {
   // ── Init (loads persisted state on startup) ───────────────────────────────────
 
   Future<void> init() async {
+    final persistedTemplate = await repository.loadReceiptTemplateSettings();
+    final loadedTemplate = ReceiptTemplateSettings(
+      businessName:
+          persistedTemplate[_receiptBusinessNameKey] ??
+          _receiptTemplateSettings.businessName,
+      receiptSubtitle:
+          persistedTemplate[_receiptSubtitleKey] ??
+          _receiptTemplateSettings.receiptSubtitle,
+      businessAddress:
+          persistedTemplate[_receiptAddressKey] ??
+          _receiptTemplateSettings.businessAddress,
+      businessPhone:
+          persistedTemplate[_receiptPhoneKey] ??
+          _receiptTemplateSettings.businessPhone,
+      footerMessage:
+          persistedTemplate[_receiptFooterMessageKey] ??
+          _receiptTemplateSettings.footerMessage,
+      footerNote:
+          persistedTemplate[_receiptFooterNoteKey] ??
+          _receiptTemplateSettings.footerNote,
+    );
+    _setReceiptTemplate(loadedTemplate, notify: false);
+
     _currentBusinessDay = await repository.loadActiveBusinessDay();
 
     if (_currentBusinessDay != null) {
@@ -151,6 +186,14 @@ class PosProvider extends ChangeNotifier {
   List<double> get visibleCashDenominations => supportedCashDenominations
       .where((d) => _cashDenominationVisible[d] ?? true)
       .toList();
+  ReceiptTemplateSettings get receiptTemplateSettings =>
+      _receiptTemplateSettings;
+  String get receiptBusinessName => _receiptTemplateSettings.businessName;
+  String get receiptSubtitle => _receiptTemplateSettings.receiptSubtitle;
+  String get receiptBusinessAddress => _receiptTemplateSettings.businessAddress;
+  String get receiptBusinessPhone => _receiptTemplateSettings.businessPhone;
+  String get receiptFooterMessage => _receiptTemplateSettings.footerMessage;
+  String get receiptFooterNote => _receiptTemplateSettings.footerNote;
 
   void setUser(AppUser user) {
     _currentUser = user;
@@ -215,6 +258,70 @@ class PosProvider extends ChangeNotifier {
     if (_printerManager.receiptHealthCheckEnabled == enabled) return;
     _printerManager.setReceiptHealthCheckEnabled(enabled);
     notifyListeners();
+  }
+
+  void setReceiptBusinessName(String value) {
+    _setReceiptTemplate(
+      _receiptTemplateSettings.copyWith(businessName: value.trim()),
+    );
+  }
+
+  void setReceiptSubtitle(String value) {
+    _setReceiptTemplate(
+      _receiptTemplateSettings.copyWith(receiptSubtitle: value.trim()),
+    );
+  }
+
+  void setReceiptBusinessAddress(String value) {
+    _setReceiptTemplate(
+      _receiptTemplateSettings.copyWith(businessAddress: value.trim()),
+    );
+  }
+
+  void setReceiptBusinessPhone(String value) {
+    _setReceiptTemplate(
+      _receiptTemplateSettings.copyWith(businessPhone: value.trim()),
+    );
+  }
+
+  void setReceiptFooterMessage(String value) {
+    _setReceiptTemplate(
+      _receiptTemplateSettings.copyWith(footerMessage: value.trim()),
+    );
+  }
+
+  void setReceiptFooterNote(String value) {
+    _setReceiptTemplate(
+      _receiptTemplateSettings.copyWith(footerNote: value.trim()),
+    );
+  }
+
+  Future<void> saveReceiptTemplateSettings(ReceiptTemplateSettings next) async {
+    _setReceiptTemplate(next);
+    await repository.saveReceiptTemplateSettings({
+      _receiptBusinessNameKey: _receiptTemplateSettings.businessName,
+      _receiptSubtitleKey: _receiptTemplateSettings.receiptSubtitle,
+      _receiptAddressKey: _receiptTemplateSettings.businessAddress,
+      _receiptPhoneKey: _receiptTemplateSettings.businessPhone,
+      _receiptFooterMessageKey: _receiptTemplateSettings.footerMessage,
+      _receiptFooterNoteKey: _receiptTemplateSettings.footerNote,
+    });
+  }
+
+  void _setReceiptTemplate(ReceiptTemplateSettings next, {bool notify = true}) {
+    if (_receiptTemplateSettings.businessName == next.businessName &&
+        _receiptTemplateSettings.receiptSubtitle == next.receiptSubtitle &&
+        _receiptTemplateSettings.businessAddress == next.businessAddress &&
+        _receiptTemplateSettings.businessPhone == next.businessPhone &&
+        _receiptTemplateSettings.footerMessage == next.footerMessage &&
+        _receiptTemplateSettings.footerNote == next.footerNote) {
+      return;
+    }
+    _receiptTemplateSettings = next;
+    _printerManager?.setReceiptTemplateSettings(next);
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   Future<void> testPrinter(PrinterRole role) async {
@@ -573,6 +680,18 @@ class PosProvider extends ChangeNotifier {
     _transactions[idx] = voided;
     await repository.updateTransactionVoid(voided);
     notifyListeners();
+  }
+
+  Future<void> reprintReceipt(Transaction transaction) async {
+    final printerManager = _printerManager;
+    if (printerManager != null &&
+        !printerManager.hasAssignment(PrinterRole.receipt)) {
+      throw StateError('No receipt printer is assigned.');
+    }
+    if (printerManager == null && _receiptPrinter is NoOpReceiptPrinter) {
+      throw StateError('Receipt printer is not configured.');
+    }
+    await _receiptPrinter.printReceipt(transaction);
   }
 
   Future<Transaction> processPayment({

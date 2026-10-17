@@ -61,8 +61,7 @@ class Transactions extends Table {
   RealColumn get cardAmount => real()();
   RealColumn get changeAmount => real()();
   DateTimeColumn get timestamp => dateTime()();
-  BoolColumn get isVoided =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get isVoided => boolean().withDefault(const Constant(false))();
   TextColumn get voidedByName => text().nullable()();
   TextColumn get voidedById => text().nullable()();
   DateTimeColumn get voidedAt => dateTime().nullable()();
@@ -120,6 +119,18 @@ class SuspendedOrderItems extends Table {
   IntColumn get quantity => integer()();
 }
 
+@DataClassName('AppSettingRow')
+class AppSettings extends Table {
+  @override
+  String get tableName => 'app_settings';
+
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
 // ── Database class ────────────────────────────────────────────────────────────
 
 @DriftDatabase(
@@ -130,6 +141,7 @@ class SuspendedOrderItems extends Table {
     CartItems,
     SuspendedOrders,
     SuspendedOrderItems,
+    AppSettings,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -138,54 +150,62 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (migrator) async {
-          await migrator.createAll();
-        },
-        onUpgrade: (migrator, from, to) async {
-          if (from < 2) {
-            await customStatement(
-              'CREATE TABLE IF NOT EXISTS suspended_orders ('
-              'id TEXT NOT NULL PRIMARY KEY, '
-              'shift_id TEXT NOT NULL, '
-              'cashier_id TEXT NULL, '
-              'cashier_name TEXT NULL, '
-              'created_at INTEGER NOT NULL, '
-              'updated_at INTEGER NOT NULL'
-              ')',
-            );
-            await customStatement(
-              'CREATE TABLE IF NOT EXISTS suspended_order_items ('
-              'id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
-              'suspended_order_id TEXT NOT NULL, '
-              'product_id TEXT NOT NULL, '
-              'product_name TEXT NOT NULL, '
-              'product_price REAL NOT NULL, '
-              'product_category TEXT NOT NULL, '
-              'product_emoji TEXT NOT NULL, '
-              'product_color INTEGER NOT NULL, '
-              'quantity INTEGER NOT NULL'
-              ')',
-            );
-          }
-          if (from < 3) {
-            final tableInfo = await customSelect(
-              'PRAGMA table_info(suspended_orders)',
-            ).get();
-            final hasOrderLabel = tableInfo.any(
-              (row) => row.data['name'] == 'order_label',
-            );
-            if (!hasOrderLabel) {
-              await customStatement(
-                "ALTER TABLE suspended_orders ADD COLUMN order_label TEXT NOT NULL DEFAULT ''",
-              );
-            }
-          }
-        },
-      );
+    onCreate: (migrator) async {
+      await migrator.createAll();
+    },
+    onUpgrade: (migrator, from, to) async {
+      if (from < 2) {
+        await customStatement(
+          'CREATE TABLE IF NOT EXISTS suspended_orders ('
+          'id TEXT NOT NULL PRIMARY KEY, '
+          'shift_id TEXT NOT NULL, '
+          'cashier_id TEXT NULL, '
+          'cashier_name TEXT NULL, '
+          'created_at INTEGER NOT NULL, '
+          'updated_at INTEGER NOT NULL'
+          ')',
+        );
+        await customStatement(
+          'CREATE TABLE IF NOT EXISTS suspended_order_items ('
+          'id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
+          'suspended_order_id TEXT NOT NULL, '
+          'product_id TEXT NOT NULL, '
+          'product_name TEXT NOT NULL, '
+          'product_price REAL NOT NULL, '
+          'product_category TEXT NOT NULL, '
+          'product_emoji TEXT NOT NULL, '
+          'product_color INTEGER NOT NULL, '
+          'quantity INTEGER NOT NULL'
+          ')',
+        );
+      }
+      if (from < 3) {
+        final tableInfo = await customSelect(
+          'PRAGMA table_info(suspended_orders)',
+        ).get();
+        final hasOrderLabel = tableInfo.any(
+          (row) => row.data['name'] == 'order_label',
+        );
+        if (!hasOrderLabel) {
+          await customStatement(
+            "ALTER TABLE suspended_orders ADD COLUMN order_label TEXT NOT NULL DEFAULT ''",
+          );
+        }
+      }
+      if (from < 4) {
+        await customStatement(
+          'CREATE TABLE IF NOT EXISTS app_settings ('
+          'key TEXT NOT NULL PRIMARY KEY, '
+          'value TEXT NOT NULL'
+          ')',
+        );
+      }
+    },
+  );
 }
 
 LazyDatabase _openConnection() {

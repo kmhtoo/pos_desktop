@@ -13,19 +13,58 @@ class PosRepository {
 
   PosRepository(this._db);
 
+  // ── App Settings ──────────────────────────────────────────────────────────────
+
+  Future<Map<String, String>> loadReceiptTemplateSettings() async {
+    final keys = {
+      'receipt.businessName',
+      'receipt.subtitle',
+      'receipt.address',
+      'receipt.phone',
+      'receipt.footerMessage',
+      'receipt.footerNote',
+    };
+    final rows = await (_db.select(
+      _db.appSettings,
+    )..where((t) => t.key.isIn(keys))).get();
+    final result = <String, String>{};
+    for (final row in rows) {
+      result[row.key] = row.value;
+    }
+    return result;
+  }
+
+  Future<void> saveReceiptTemplateSettings(Map<String, String> settings) async {
+    await _db.transaction(() async {
+      for (final entry in settings.entries) {
+        await _db
+            .into(_db.appSettings)
+            .insertOnConflictUpdate(
+              AppSettingsCompanion(
+                key: Value(entry.key),
+                value: Value(entry.value),
+              ),
+            );
+      }
+    });
+  }
+
   // ── Business Day ─────────────────────────────────────────────────────────────
 
   Future<BusinessDay?> loadActiveBusinessDay() async {
-    final row = await (_db.select(_db.businessDays)
-          ..where((t) => t.closedAt.isNull())
-          ..orderBy([(t) => OrderingTerm.desc(t.openedAt)])
-          ..limit(1))
-        .getSingleOrNull();
+    final row =
+        await (_db.select(_db.businessDays)
+              ..where((t) => t.closedAt.isNull())
+              ..orderBy([(t) => OrderingTerm.desc(t.openedAt)])
+              ..limit(1))
+            .getSingleOrNull();
     return row == null ? null : _toBusinessDay(row);
   }
 
   Future<void> saveBusinessDay(BusinessDay bd) async {
-    await _db.into(_db.businessDays).insertOnConflictUpdate(
+    await _db
+        .into(_db.businessDays)
+        .insertOnConflictUpdate(
           BusinessDaysCompanion(
             id: Value(bd.id),
             openedAt: Value(bd.openedAt),
@@ -41,15 +80,18 @@ class PosRepository {
   // ── Shifts ───────────────────────────────────────────────────────────────────
 
   Future<List<Shift>> loadShiftsForDay(String businessDayId) async {
-    final rows = await (_db.select(_db.shifts)
-          ..where((t) => t.businessDayId.equals(businessDayId))
-          ..orderBy([(t) => OrderingTerm.asc(t.openedAt)]))
-        .get();
+    final rows =
+        await (_db.select(_db.shifts)
+              ..where((t) => t.businessDayId.equals(businessDayId))
+              ..orderBy([(t) => OrderingTerm.asc(t.openedAt)]))
+            .get();
     return rows.map(_toShift).toList();
   }
 
   Future<void> saveShift(Shift shift) async {
-    await _db.into(_db.shifts).insertOnConflictUpdate(
+    await _db
+        .into(_db.shifts)
+        .insertOnConflictUpdate(
           ShiftsCompanion(
             id: Value(shift.id),
             businessDayId: Value(shift.businessDayId),
@@ -66,17 +108,20 @@ class PosRepository {
 
   // ── Suspended Orders ───────────────────────────────────────────────────────────
 
-  Future<List<SuspendedOrder>> loadSuspendedOrdersForShift(String shiftId) async {
-    final rows = await (_db.select(_db.suspendedOrders)
-          ..where((t) => t.shiftId.equals(shiftId))
-          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
-        .get();
+  Future<List<SuspendedOrder>> loadSuspendedOrdersForShift(
+    String shiftId,
+  ) async {
+    final rows =
+        await (_db.select(_db.suspendedOrders)
+              ..where((t) => t.shiftId.equals(shiftId))
+              ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+            .get();
 
     final result = <SuspendedOrder>[];
     for (final row in rows) {
-      final itemRows = await (_db.select(_db.suspendedOrderItems)
-            ..where((i) => i.suspendedOrderId.equals(row.id)))
-          .get();
+      final itemRows = await (_db.select(
+        _db.suspendedOrderItems,
+      )..where((i) => i.suspendedOrderId.equals(row.id))).get();
       result.add(_toSuspendedOrder(row, itemRows));
     }
     return result;
@@ -84,7 +129,9 @@ class PosRepository {
 
   Future<void> saveSuspendedOrder(SuspendedOrder order) async {
     await _db.transaction(() async {
-      await _db.into(_db.suspendedOrders).insertOnConflictUpdate(
+      await _db
+          .into(_db.suspendedOrders)
+          .insertOnConflictUpdate(
             SuspendedOrdersCompanion(
               id: Value(order.id),
               shiftId: Value(order.shiftId),
@@ -95,11 +142,13 @@ class PosRepository {
               updatedAt: Value(order.updatedAt),
             ),
           );
-      await (_db.delete(_db.suspendedOrderItems)
-            ..where((t) => t.suspendedOrderId.equals(order.id)))
-          .go();
+      await (_db.delete(
+        _db.suspendedOrderItems,
+      )..where((t) => t.suspendedOrderId.equals(order.id))).go();
       for (final item in order.items) {
-        await _db.into(_db.suspendedOrderItems).insert(
+        await _db
+            .into(_db.suspendedOrderItems)
+            .insert(
               SuspendedOrderItemsCompanion.insert(
                 suspendedOrderId: order.id,
                 productId: item.product.id,
@@ -117,27 +166,29 @@ class PosRepository {
 
   Future<void> deleteSuspendedOrder(String orderId) async {
     await _db.transaction(() async {
-      await (_db.delete(_db.suspendedOrderItems)
-            ..where((t) => t.suspendedOrderId.equals(orderId)))
-          .go();
-      await (_db.delete(_db.suspendedOrders)..where((t) => t.id.equals(orderId)))
-          .go();
+      await (_db.delete(
+        _db.suspendedOrderItems,
+      )..where((t) => t.suspendedOrderId.equals(orderId))).go();
+      await (_db.delete(
+        _db.suspendedOrders,
+      )..where((t) => t.id.equals(orderId))).go();
     });
   }
 
   // ── Transactions ──────────────────────────────────────────────────────────────
 
   Future<List<Transaction>> loadTransactionsForShift(String shiftId) async {
-    final rows = await (_db.select(_db.transactions)
-          ..where((t) => t.shiftId.equals(shiftId))
-          ..orderBy([(t) => OrderingTerm.desc(t.timestamp)]))
-        .get();
+    final rows =
+        await (_db.select(_db.transactions)
+              ..where((t) => t.shiftId.equals(shiftId))
+              ..orderBy([(t) => OrderingTerm.desc(t.timestamp)]))
+            .get();
 
     final result = <Transaction>[];
     for (final row in rows) {
-      final itemRows = await (_db.select(_db.cartItems)
-            ..where((i) => i.transactionId.equals(row.id)))
-          .get();
+      final itemRows = await (_db.select(
+        _db.cartItems,
+      )..where((i) => i.transactionId.equals(row.id))).get();
       result.add(_toTransaction(row, itemRows));
     }
     return result;
@@ -145,7 +196,9 @@ class PosRepository {
 
   Future<void> insertTransaction(Transaction txn) async {
     await _db.transaction(() async {
-      await _db.into(_db.transactions).insert(
+      await _db
+          .into(_db.transactions)
+          .insert(
             TransactionsCompanion.insert(
               id: txn.id,
               shiftId: txn.shiftId ?? '',
@@ -162,7 +215,9 @@ class PosRepository {
             ),
           );
       for (final item in txn.items) {
-        await _db.into(_db.cartItems).insert(
+        await _db
+            .into(_db.cartItems)
+            .insert(
               CartItemsCompanion.insert(
                 transactionId: txn.id,
                 productId: item.product.id,
@@ -179,53 +234,57 @@ class PosRepository {
   }
 
   Future<void> updateTransactionVoid(Transaction txn) async {
-    await (_db.update(_db.transactions)
-          ..where((t) => t.id.equals(txn.id)))
-        .write(TransactionsCompanion(
-      isVoided: const Value(true),
-      voidedByName: Value(txn.voidedByName),
-      voidedById: Value(txn.voidedById),
-      voidedAt: Value(txn.voidedAt),
-    ));
+    await (_db.update(
+      _db.transactions,
+    )..where((t) => t.id.equals(txn.id))).write(
+      TransactionsCompanion(
+        isVoided: const Value(true),
+        voidedByName: Value(txn.voidedByName),
+        voidedById: Value(txn.voidedById),
+        voidedAt: Value(txn.voidedAt),
+      ),
+    );
   }
 
   // ── Domain mappers ────────────────────────────────────────────────────────────
 
   BusinessDay _toBusinessDay(BusinessDayRow r) => BusinessDay(
-        id: r.id,
-        openedAt: r.openedAt,
-        closedAt: r.closedAt,
-        openedByName: r.openedByName,
-        openedById: r.openedById,
-        closedByName: r.closedByName,
-        closedById: r.closedById,
-      );
+    id: r.id,
+    openedAt: r.openedAt,
+    closedAt: r.closedAt,
+    openedByName: r.openedByName,
+    openedById: r.openedById,
+    closedByName: r.closedByName,
+    closedById: r.closedById,
+  );
 
   Shift _toShift(ShiftRow r) => Shift(
-        id: r.id,
-        businessDayId: r.businessDayId,
-        type: ShiftType.values.byName(r.type),
-        openedAt: r.openedAt,
-        closedAt: r.closedAt,
-        openedByName: r.openedByName,
-        openedById: r.openedById,
-        closedByName: r.closedByName,
-        closedById: r.closedById,
-      );
+    id: r.id,
+    businessDayId: r.businessDayId,
+    type: ShiftType.values.byName(r.type),
+    openedAt: r.openedAt,
+    closedAt: r.closedAt,
+    openedByName: r.openedByName,
+    openedById: r.openedById,
+    closedByName: r.closedByName,
+    closedById: r.closedById,
+  );
 
   Transaction _toTransaction(TransactionRow r, List<CartItemRow> itemRows) {
     final items = itemRows
-        .map((i) => CartItem(
-              product: Product(
-                id: i.productId,
-                name: i.productName,
-                price: i.productPrice,
-                category: i.productCategory,
-                emoji: i.productEmoji,
-                color: Color(i.productColor),
-              ),
-              quantity: i.quantity,
-            ))
+        .map(
+          (i) => CartItem(
+            product: Product(
+              id: i.productId,
+              name: i.productName,
+              price: i.productPrice,
+              category: i.productCategory,
+              emoji: i.productEmoji,
+              color: Color(i.productColor),
+            ),
+            quantity: i.quantity,
+          ),
+        )
         .toList();
 
     return Transaction(

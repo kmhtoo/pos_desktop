@@ -197,6 +197,29 @@ void main() {
       expect(reloaded.suspendedOrders.single.orderLabel, 'Saved Order #1');
     });
 
+    test('receipt template settings persist across provider reload', () async {
+      await provider.saveReceiptTemplateSettings(
+        const ReceiptTemplateSettings(
+          businessName: 'Demo Bistro',
+          receiptSubtitle: 'Takeaway Receipt',
+          businessAddress: 'No.22 Beach Street',
+          businessPhone: '09-123-456-789',
+          footerMessage: 'Thank you Demo Bistro',
+          footerNote: 'See you tomorrow',
+        ),
+      );
+
+      final reloaded = PosProvider(repository: PosRepository(database));
+      await reloaded.init();
+
+      expect(reloaded.receiptBusinessName, 'Demo Bistro');
+      expect(reloaded.receiptSubtitle, 'Takeaway Receipt');
+      expect(reloaded.receiptBusinessAddress, 'No.22 Beach Street');
+      expect(reloaded.receiptBusinessPhone, '09-123-456-789');
+      expect(reloaded.receiptFooterMessage, 'Thank you Demo Bistro');
+      expect(reloaded.receiptFooterNote, 'See you tomorrow');
+    });
+
     test('cannot close shift while suspended orders remain', () async {
       final user = AppUser(
         id: '1001',
@@ -241,6 +264,30 @@ void main() {
 
       expect(printer.printedTransactions.length, 1);
       expect(printer.printedTransactions.first.id, txn.id);
+    });
+
+    test('reprints a transaction from receipt history', () async {
+      final printer = _FakeReceiptPrinter();
+      final providerWithPrinter = PosProvider(
+        repository: PosRepository(database),
+        receiptPrinter: printer,
+      );
+      final transaction = Transaction(
+        id: 'TXN-HISTORY-1',
+        items: const [],
+        subtotal: 0,
+        tax: 0,
+        total: 0,
+        tenderType: TenderType.cash,
+        cashAmount: 0,
+        cardAmount: 0,
+        change: 0,
+        timestamp: DateTime(2026, 1, 1),
+      );
+
+      await providerWithPrinter.reprintReceipt(transaction);
+
+      expect(printer.printedTransactions, [transaction]);
     });
 
     test(
